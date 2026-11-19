@@ -114,6 +114,13 @@ export interface GongmunOptions {
   /** 개조식 장 헤더 제목 칸을 글자 폭에 맞춤. 기본: 꺼짐(제목 칸이 본문 폭까지) */
   chapterFit?: boolean
   /**
+   * 개조식 단계별 계단 들여쓰기 — 장 띠 0 / 절 띠 1칸 / □ 2칸 / ○ 3칸 / - 4칸 / ㆍ 5칸(1칸 = 5mm).
+   * □ 아래 데이터 표는 □ 위치(2칸)에서 시작해 오른쪽 끝에 맞추고, ※ 참고 줄은 ○ 위치(3칸). 개조식 전용, 기본 꺼짐
+   */
+  stepIndent?: boolean
+  /** 개조식 단계별 간격 — □·○·- 줄간격 200%, 장·절 띠 앞 300%, □ 앞 250%(문단 위 간격 값으로 맞춤). 개조식 전용, 기본 꺼짐 */
+  stepSpacing?: boolean
+  /**
    * h2 장 제목 표기 (v5): 'band'=로마자 채움 칸 + 제목 띠 표(보고서·계획서 기본 — 계획서 장르 실측 37~39%) /
    * 'roman'=Ⅰ. Ⅱ. 텍스트 / 'number'=1. 2. (통지 기본) / 'box'=장 없이 □ 대항목으로 / 'none'=번호 없음 /
    * 'square'=[Ⅰ] 테두리 번호 상자 + 위아래 괘선 제목(서울 방침서 기본).
@@ -226,6 +233,10 @@ export interface ResolvedGongmun {
   bodyTitleBox: boolean
   /** 개조식 장 헤더 제목 칸 글자 폭 맞춤 — 기본 꺼짐 */
   chapterFit: boolean
+  /** 개조식 단계별 계단 들여쓰기(개조식 전용 — 다른 프리셋은 항상 false) */
+  stepIndent: boolean
+  /** 개조식 단계별 간격(개조식 전용 — 다른 프리셋은 항상 false) */
+  stepSpacing: boolean
   /** h2 장 제목 표기 — 보고서·계획서 'roman', 통지·공고 'number' (v5) */
   h2Marker: "band" | "roman" | "box" | "number" | "none" | "square"
   /** 띠 제목 번호칸 채움색·글자색 (#RRGGBB, 대문자 정규화) */
@@ -439,6 +450,9 @@ export function incompatibleGongmunWarnings(opts: GongmunOptions): string[] {
   if (opts.sizes && Object.keys(opts.sizes).length > 0 && !usesReportFonts(preset)) {
     warns.push(`sizes(개조식 요소 크기)는 개조식·보고서·계획서 전용 — '${preset}' 프리셋에서 무시됨`)
   }
+  if ((opts.stepIndent || opts.stepSpacing) && preset !== "gaejosik") {
+    warns.push(`step_indent·step_spacing(단계별 들여쓰기·간격)은 개조식 전용 — '${preset}' 프리셋에서 무시됨`)
+  }
   if (opts.suppressSingle && (opts.numbering ?? PRESET_DEFAULTS[preset].numbering) !== "standard") {
     warns.push(`suppress_single(단일 형제 부호 생략)은 법정 번호(standard) 전용 — '${preset}' 프리셋(불릿 체계)에서 무동작`)
   }
@@ -525,6 +539,8 @@ export function resolveGongmun(input: GongmunOptions): ResolvedGongmun {
     // 표지 없는 개조식은 맨 앞 h1 하나를 이 상자로 그린다(실측: 표지 없는 □ 문서 139건 중 73건이 제목을 상자 표에)
     bodyTitleBox: opts.bodyTitleBox ?? gaejosik,
     chapterFit: opts.chapterFit ?? false,
+    stepIndent: gaejosik && (opts.stepIndent ?? false),
+    stepSpacing: gaejosik && (opts.stepSpacing ?? false),
     // h2 말머리 — 실측: 보고서 양식 □ 대항목(QA-2), 공고문 아라비아("1. 사업개요", 바이오헬스 실측)
     // v5 라운드 3: 보고서·계획서 기본 band(띠 표) — 서울 plan 7/19·교육청 7/18 실측, 실무자 요청
     h2Marker: opts.h2Marker ?? (preset === "report" || preset === "plan" ? "band" : preset === "bangchim" ? "square" : preset === "notice" ? "number" : "none"),
@@ -625,9 +641,10 @@ export function levelIndent(
   bullet2: Bullet2 = "○",
   asteriskThird = false,
   markerHeight: number = bodyHeight,
+  stepIndent = false,
 ): LevelIndent {
   // 개조식은 실측 양식의 들여쓰기 체계(□ 0 / ○ 1자 / - 1.5자 …)를 따른다.
-  if (numbering === "gaejosik") return gaejosikLevelIndent(depth, bodyHeight, sizes, bullet2)
+  if (numbering === "gaejosik") return gaejosikLevelIndent(depth, bodyHeight, sizes, bullet2, stepIndent)
   // 같은 단계는 부호 종류가 일정하므로 대표 부호(순번 0)의 폭으로 내어쓰기를 정한다.
   // 부호폭은 그 단계의 글자 크기(levels 오버라이드면 그 크기)로 — 둘째 줄이 내용 첫 글자에 정렬
   const marker = numbering === "report" ? reportMarker(depth, bullet2, asteriskThird) : standardMarker(depth, 0)

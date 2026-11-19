@@ -51,6 +51,8 @@ export interface GongmunTableStyle {
    * 라벨열 음영 / 축폭(본문폭 −1800) + 호스트 우측정렬 (gap_tables TBL-01~11)
    */
   bfRegistry?: TableBfRegistry
+  /** 데이터 표를 더 좁힐 폭(HWPUNIT) — 개조식 stepIndent 가 표 왼쪽 끝을 □ 위치(2칸)에 맞출 때(DATA_TABLE_INSET 에 더해 적용). 기본 0 */
+  extraInset?: number
   /** 데이터 표 호스트 문단 paraPr(RIGHT) — bfRegistry와 함께 지정 */
   rightParaPr?: number
   /** 헤더행 음영색 (기본 #E6E6E6 — 실측 GT1·샘플양식1) */
@@ -355,7 +357,7 @@ export function generateTable(rows: string[][], theme: ResolvedTheme, style: Gon
   const colCnt = Math.max(...rows.map(r => r.length), 1)
   const reg = style?.bfRegistry ?? null
   // 실측 모드: 데이터 표는 본문폭보다 좁게 + 호스트 우측정렬 (TBL-09)
-  const totalW = style ? (reg ? style.totalWidth - DATA_TABLE_INSET : style.totalWidth) : 44000
+  const totalW = style ? (reg ? style.totalWidth - DATA_TABLE_INSET - (style.extraInset ?? 0) : style.totalWidth) : 44000
   const measureH = style?.charHeight ?? 1000
 
   // 서식 프로필 매칭 (#41) — 매칭되면 셀 좌표별 실측 서식 최우선.

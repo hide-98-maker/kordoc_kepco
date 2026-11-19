@@ -92,20 +92,42 @@ export function gaejosikSpaceBefore(depth: number, bodyHeight: number): number {
  * 단계별 들여쓰기 — 실측: 선행 공백 □=1 ○=2 -=3 (0.5em씩) ≈
  * □ left 0 / ○ 1자 / - 1.5자 / ㆍ 2자(+0.5자씩 누적). 내어쓰기는 부호 실폭.
  */
-export function gaejosikLevelIndent(depth: number, bodyHeight: number, sizes: GaejosikSizeOverrides = {}, bullet2: Bullet2 = "○"): { left: number; indent: number } {
+export function gaejosikLevelIndent(depth: number, bodyHeight: number, sizes: GaejosikSizeOverrides = {}, bullet2: Bullet2 = "○", stepIndent = false): { left: number; indent: number } {
   const lefts = [0, 1.0, 1.5, 2.0]
   const left = depth <= 3
     ? Math.round(lefts[depth] * bodyHeight)
     : Math.round((2.0 + (depth - 3) * 0.5) * bodyHeight)
   // □는 자기 크기(16pt 상당)로 부호폭 계산 — 둘째 줄이 내용 첫 글자에 정렬
   const h = depth === 0 ? gaejosikSizes(bodyHeight, sizes).dae : bodyHeight
-  return { left, indent: -markerWidth(gaejosikMarker(depth, bullet2), h) }
+  return { left: stepIndent ? gaejosikStepLeft(depth) : left, indent: -markerWidth(gaejosikMarker(depth, bullet2), h) }
+}
+
+/** 단계별 계단 들여쓰기(stepIndent)의 1칸 — 5mm */
+export const GAEJOSIK_STEP_UNIT = mmToHwpunit(5)
+
+/** stepIndent 의 단계별 왼쪽 여백 — □(0) 2칸 / ○(1) 3칸 / -(2) 4칸 / ㆍ(3+) 5칸 이상. 장 띠 0·절 띠 1칸은 따로 */
+export function gaejosikStepLeft(depth: number): number {
+  return (Math.max(depth, 0) + 2) * GAEJOSIK_STEP_UNIT
+}
+
+/** stepSpacing 의 줄간격 — □·○·- 본문 단계 200% */
+export const GAEJOSIK_STEP_LINE_SPACING = 200
+
+/**
+ * stepSpacing 의 문단 위 간격(HWPUNIT, 줄간격 200% 위에 더하는 몫).
+ * 목표 간격은 앞 문단과의 전체 거리 — 장·절 띠 앞 300%, □ 앞 250%, □·○ 사이 200%(줄간격 그대로).
+ * 한 줄 100% = 본문 글자 높이로 보고 목표에서 줄간격 200%를 뺀 만큼을 문단 위 간격으로 둔다.
+ */
+export function gaejosikStepSpaceBefore(kind: "band" | "dae" | "other", bodyHeight: number): number {
+  const extra = kind === "band" ? 100 : kind === "dae" ? 50 : 0
+  return Math.round((extra / 100) * bodyHeight)
 }
 
 /** ※ 참고 문단 들여쓰기 — 실측: 선행 공백 5칸(13pt) ≈ 2.5×cham폭 */
-export function gaejosikChamIndent(bodyHeight: number, sizes: GaejosikSizeOverrides = {}): { left: number; indent: number } {
+export function gaejosikChamIndent(bodyHeight: number, sizes: GaejosikSizeOverrides = {}, stepIndent = false): { left: number; indent: number } {
   const cham = gaejosikSizes(bodyHeight, sizes).cham
-  return { left: Math.round(2.5 * cham), indent: -markerWidth("※", cham) }
+  // stepIndent: ※ 는 ○ 위치(3칸)에서 시작
+  return { left: stepIndent ? gaejosikStepLeft(1) : Math.round(2.5 * cham), indent: -markerWidth("※", cham) }
 }
 
 /**

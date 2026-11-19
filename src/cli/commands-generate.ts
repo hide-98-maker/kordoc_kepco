@@ -19,7 +19,7 @@ import type { Command } from "commander"
 /** --template 과 함께 못 쓰는 옵션 (commander 키) — 서식·쪽·이미지는 견본이 정한다 */
 const TEMPLATE_CLI_CONFLICTS = [
   "preset", "font", "pt", "lineSpacing", "profile", "org", "date", "toc", "cover", "approval", "pageNumbers", "endMark",
-  "bodyTitleBox", "chapterFit", "h2Marker", "bandColor", "bandTextColor", "summary", "docInfo", "dept", "checklist", "coverLabel",
+  "bodyTitleBox", "chapterFit", "stepIndent", "stepSpacing", "h2Marker", "bandColor", "bandTextColor", "summary", "docInfo", "dept", "checklist", "coverLabel",
   "fonts", "sizes", "levels", "levelsFrom", "layout", "bullet2", "agency", "suppressSingle", "docHead", "docFoot", "reportInfo",
   "noticeHead", "pressHead", "pressSub", "pressPeople", "plain", "paper", "landscape", "columns", "columnGap", "columnLine", "header", "footer",
   "imageDir", "inlineMath",
@@ -52,6 +52,8 @@ export function registerGenerateCommands(program: Command): void {
     .option("--no-end-mark", "'끝.' 표시 끄기 (기안문 기본 켜짐)")
     .option("--no-body-title-box", "본문 첫 페이지 제목 반복 박스 끄기 (개조식+표지 기본 켜짐)")
     .option("--chapter-fit", "개조식 장 헤더 제목 칸을 글자 폭에 맞춤 (기본: 본문 폭까지)")
+    .option("--step-indent", "개조식 단계별 계단 들여쓰기 (장 띠 0·절 띠 1칸·□ 2칸·○ 3칸·- 4칸, 1칸=5mm)")
+    .option("--step-spacing", "개조식 단계별 간격 (□○- 줄간격 200%·장절 띠 앞 300%·□ 앞 250%)")
     .option("--h2-marker <type>", "h2 장 제목 표기: band(로마자 채움 칸 + 제목 띠 표 — 보고서·계획서 기본)·roman(Ⅰ. 텍스트)·number(1. — 통지 기본)·box(장 없이 □ 대항목)·none")
     .option("--band-color <hex>", "띠 제목 번호칸 채움색 #RRGGBB (기본 #003366 — 실측 최다. 교육청형 밝은 띠: #DFE6F7)")
     .option("--band-text-color <hex>", "띠 제목 번호 글자색 #RRGGBB (기본 #FFFFFF — 밝은 띠면 #000000)")
@@ -233,6 +235,7 @@ export function registerGenerateCommands(program: Command): void {
             // --no-body-title-box 단독 플래그 — commander 기본 true는 "미지정"으로 정돈
             bodyTitleBox: opts.bodyTitleBox === false ? false : undefined,
             chapterFit: opts.chapterFit,
+            stepIndent: opts.stepIndent, stepSpacing: opts.stepSpacing,
             h2Marker: enumCheck("--h2-marker", opts.h2Marker, H2_MARKERS),
             bandColor: opts.bandColor, bandTextColor: opts.bandTextColor,
             fonts: opts.fonts ? parseKv(String(opts.fonts), "--fonts") : undefined,

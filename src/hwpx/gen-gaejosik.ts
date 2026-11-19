@@ -316,8 +316,9 @@ export function gaejosikNeedsExtraChars(blocks: MdBlock[]): boolean {
  * 1×3 [번호칸 약 10mm 진한 채움·흰 글자 HY헤드라인M 16(37건)][간격 2mm(47건)][제목칸 채움 없음(114/156)·아래 실선 0.5mm(64건)],
  * 제목 HY헤드라인M 16. 번호칸 채움은 같은 문서 장 머리 남색 #193AAA (실측 진한 채움 #231E7E·#333399·#3057B9·#203A7B 10건)
  */
-export function buildGaejosikSection(num: string, title: string, bodyWidth: number, bfReg: TableBfRegistry, numChar: number, titleChar: number): string {
-  const w = bodyWidth - 566, numW = 2835, gapW = 567, titleW = w - numW - gapW, h = 2551
+export function buildGaejosikSection(num: string, title: string, bodyWidth: number, bfReg: TableBfRegistry, numChar: number, titleChar: number, host: { paraPr?: number; inset?: number } = {}): string {
+  // host.inset(stepIndent 1칸): 띠 왼쪽을 들이고 오른쪽 끝은 그대로 — 표 폭을 그만큼 줄인다. host.paraPr: 왼쪽 여백이 있는 호스트 문단
+  const w = bodyWidth - 566 - (host.inset ?? 0), numW = 2835, gapW = 567, titleW = w - numW - gapW, h = 2551
   const none = bfReg.get({ t: "none", b: "none", l: "none", r: "none" })
   const fill = bfReg.get({ t: "none", b: "none", l: "none", r: "none", fill: "#193AAA" })
   const under = bfReg.get({ t: "none", b: ["0.5 mm", "#000000"], l: "none", r: "none" })
@@ -326,7 +327,7 @@ export function buildGaejosikSection(num: string, title: string, bodyWidth: numb
   const row = cell({ bf: fill, col: 0, w: numW, h, paras: numPara })
     + cell({ bf: none, col: 1, w: gapW, h })
     + cell({ bf: under, col: 2, w: titleW, h, paras: titlePara, name: "__kordoc_h3n" })
-  return `<hp:p paraPrIDRef="${GJ_PARA_CHAPTER}" styleIDRef="0"><hp:run charPrIDRef="${CHAR_NORMAL}">${table([row], w, h, 3, 1, bodyWidth)}</hp:run></hp:p>`
+  return `<hp:p paraPrIDRef="${host.paraPr ?? GJ_PARA_CHAPTER}" styleIDRef="0"><hp:run charPrIDRef="${CHAR_NORMAL}">${table([row], w, h, 3, 1, bodyWidth)}</hp:run></hp:p>`
 }
 
 // ─── 장 헤더 표 ─────────────────────────────────────

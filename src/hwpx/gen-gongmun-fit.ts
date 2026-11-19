@@ -70,7 +70,7 @@ export function computeGongmunFitPlan(
       if (gongmun.levels?.[depth]) continue
       const content = plainRenderText(block.text || "")
       text = marker ? `${marker} ${content}` : content
-      const li = levelIndent(depth, gongmun.bodyHeight, gongmun.numbering, gongmun.sizes, gongmun.bullet2, usesAsteriskThird(gongmun.preset))
+      const li = levelIndent(depth, gongmun.bodyHeight, gongmun.numbering, gongmun.sizes, gongmun.bullet2, usesAsteriskThird(gongmun.preset), gongmun.bodyHeight, gongmun.stepIndent)
       // 부호 생략 항목은 내어쓰기 없는 전용 paraPr(GONGMUN_LIST_PLAIN_BASE) — indent 0.
       // 내어쓰기 변형('10.'류)은 자기 부호폭 기준 (P1-1)
       const left = li.left

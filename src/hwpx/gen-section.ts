@@ -8,7 +8,7 @@
  */
 
 import { type ResolvedGongmun, levelIndent, mmToHwpunit, needsGaejosikAssets, usesReportFonts } from "./gongmun.js"
-import { stripChapterNumber, gaejosikSizes, gaejosikBodyWidth, GAEJOSIK_BASE_WIDTH } from "./gaejosik.js"
+import { GAEJOSIK_STEP_UNIT, stripChapterNumber, gaejosikSizes, gaejosikBodyWidth, GAEJOSIK_BASE_WIDTH } from "./gaejosik.js"
 import { type GaejosikSummaryPlan, buildGaejosikSummary, buildGaejosikCover, coverMetaBlocks, buildGaejosikToc, buildGaejosikChapter, buildGaejosikBodyTitle, gaejosikTitleH1, resetGjTableIds, buildGaejosikSection, GJ_SECTION_RE, GJ_CAPTION_RE, GJ_UNIT_RE, GJ_SOURCE_RE, type GaejosikExtraChars } from "./gen-gaejosik.js"
 import {
   NS_SECTION, NS_PARA,
@@ -326,7 +326,10 @@ function renderHeading(block: MdBlock, blockIdx: number, ctx: SectionCtx): strin
     } else if (lvl === 3) {
       // h3 "1. 제목" → 절 띠(번호칸·제목 밑줄), 번호 없는 h3 → □ 대항목 (HY헤드라인M 16pt)
       const sec = GJ_SECTION_RE.exec((block.text || "").trim())
-      if (sec && ctx.gjChars && bfReg) return buildGaejosikSection(sec[1], sec[2], gjBodyW, bfReg, ctx.gjChars.sectionNum, GJ_CHAR_DAE)
+      if (sec && ctx.gjChars && bfReg) return buildGaejosikSection(sec[1], sec[2], gjBodyW, bfReg, ctx.gjChars.sectionNum, GJ_CHAR_DAE,
+        gongmun!.stepIndent || gongmun!.stepSpacing
+          ? { paraPr: GONGMUN_LIST_VARIANT_BASE + (ctx.gongmunList?.indentVariants.length ?? 0), inset: gongmun!.stepIndent ? GAEJOSIK_STEP_UNIT : 0 }
+          : {})
       return markedParagraph("□", block.text || "", GONGMUN_LIST_BASE, GJ_CHAR_DAE, gongmun!.bodyHeight / 2,
         (id) => (id === CHAR_BOLD ? GJ_CHAR_DAE_BOLD : id))
     }
@@ -537,7 +540,7 @@ function renderTable(block: MdBlock, ctx: SectionCtx): string {
 function renderHtmlTable(block: MdBlock, ctx: SectionCtx): string {
   const { tableStyle, bfReg } = ctx
   // 실측 모드(bfReg): 데이터 표 축폭 + 호스트 우측정렬 (TBL-09) — 중첩표는 재귀에서 자체 폭 계산
-  const htmlW = tableStyle ? (bfReg ? tableStyle.totalWidth - DATA_TABLE_INSET : tableStyle.totalWidth) : 44000
+  const htmlW = tableStyle ? (bfReg ? tableStyle.totalWidth - DATA_TABLE_INSET - (tableStyle.extraInset ?? 0) : tableStyle.totalWidth) : 44000
   const tbl = generateHtmlTableXml(block.text || "", ctx.theme, htmlW, tableStyle, ctx.remap, ctx.tableSeq++, ctx.images)
   if (tbl) {
     ctx.opener.emitCarrier(ctx.paraXmls)
@@ -617,6 +620,7 @@ export function blocksToSectionXml(
           tblLeftParaPr: GONGMUN_TBL_LEFT,
           bfRegistry: bfReg ?? undefined,
           rightParaPr: GONGMUN_RIGHT,
+          ...(gongmun.stepIndent ? { extraInset: Math.max(0, 2 * GAEJOSIK_STEP_UNIT - DATA_TABLE_INSET) } : {}),
         }
       : null,
     // 개조식 장식표(표지·목차·장헤더·제목박스) 폭 스케일용 본문폭 — margins 오버라이드 대응
