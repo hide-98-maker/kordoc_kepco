@@ -70,7 +70,7 @@ export function registerGenerateTools(server: McpServer): void {
       end_mark: z.boolean().optional().describe("본문 끝 '끝.' 표시 (행정업무규정). 미지정 시 기안문만 켜짐, 본문이 이미 '끝.'으로 끝나면 중복 생성 안 함"),
       body_title_box: z.boolean().optional().describe("본문 첫 페이지 제목 반복 박스 (개조식 실측 관행). 미지정 시 개조식+표지 조합에서 켜짐"),
       chapter_fit: z.boolean().optional().describe("개조식 장 헤더 제목 칸을 글자 폭에 맞춤. 미지정 시 제목 칸이 본문 폭까지"),
-      step_indent: z.boolean().optional().describe("개조식 단계별 계단 들여쓰기: 장 띠 0·절 띠 1칸·□ 2칸·○ 3칸·- 4칸(1칸=5mm), □ 아래 데이터 표는 □ 위치에서 시작. 개조식 전용, 미지정 시 꺼짐"),
+      step_indent: z.boolean().optional().describe("개조식 단계별 계단 들여쓰기: 장 띠 0·절 띠 1칸·□ 2칸·○ 3칸·- 4칸(1칸=16pt 글자 폭), □ 아래 데이터 표는 □ 위치에서 시작. 개조식 전용, 미지정 시 꺼짐"),
       step_spacing: z.boolean().optional().describe("개조식 단계별 간격: □○- 줄간격 200%, 장·절 띠 앞 300%, □ 앞 250%. 개조식 전용, 미지정 시 꺼짐"),
       h2_marker: z.enum(H2_MARKERS).optional().describe("h2 장 제목 표기: band=로마자 채움 칸+제목 띠 표(보고서·계획서 기본), roman='Ⅰ. 제목' 텍스트, number='1. 제목'(통지 기본), box=장 없이 □ 대항목으로, none=번호 없음. 기안문 본문의 h2는 항상 법정 '1.' 항목"),
       band_color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional().describe("띠 제목 번호칸 채움색 #RRGGBB (기본 #003366 실측 최다. 교육청형 밝은 띠는 #DFE6F7 + band_text_color #000000)"),

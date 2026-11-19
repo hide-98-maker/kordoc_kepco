@@ -8,7 +8,7 @@ import { markdownToHwpx, parse } from "../src/index.js"
 import { buildGongmunOptions } from "../src/hwpx/gongmun-surface.js"
 import { resolveGongmun } from "../src/hwpx/gongmun.js"
 
-const UNIT = 1417
+const UNIT = 1600
 const md = `# 시험\n\n## 장\n\n### 1. 절\n\n### 대항목 가\n\n- 중항목 가-1\n  - 소항목 가-1-a\n\n### 대항목 나\n\n- 중항목 나-1\n\n<right>출처: 자체</right>`
 const base = { preset: "gaejosik" as const, cover: false, toc: false }
 
@@ -41,7 +41,7 @@ describe("개조식 단계별 들여쓰기·간격 (stepIndent·stepSpacing)", (
     assert.equal(p.get(8)!.left, 2 * UNIT)
     assert.equal(p.get(9)!.left, 3 * UNIT)
     assert.equal(p.get(10)!.left, 4 * UNIT)
-    assert.equal(p.get(20)!.left, 3 * UNIT, "※ 참고는 ○ 위치")
+    assert.equal(p.get(20)!.left, 4 * UNIT, "※ 참고는 - 와 같은 자리")
   })
 
   it("stepIndent — 절 띠는 1칸 들이고 표 폭을 1칸 줄여 오른쪽 끝 유지, 장 띠는 0칸", async () => {
@@ -70,6 +70,14 @@ describe("개조식 단계별 들여쓰기·간격 (stepIndent·stepSpacing)", (
     assert.equal(p.get(8)!.prev, 750)
     assert.equal(p.get(9)!.prev, 0)
     assert.equal(p.get(23)!.prev, 1500)
+    assert.equal(p.get(20)!.prev, 2340, "※ 위 180%")
+    assert.equal(p.get(20)!.line, 200)
+  })
+
+  it("※ 참고 글꼴은 맑은 고딕 기본, fonts.ref 로 덮어쓴다", () => {
+    assert.equal(resolveGongmun({ preset: "gaejosik", stepIndent: true }).fonts.ref, "맑은 고딕")
+    assert.equal(resolveGongmun({ preset: "gaejosik", stepSpacing: true, fonts: { ref: "함초롬돋움" } }).fonts.ref, "함초롬돋움")
+    assert.equal(resolveGongmun({ preset: "gaejosik" }).fonts.ref, undefined)
   })
 
   it("왕복 — 켜도 파서가 위계를 복원", async () => {

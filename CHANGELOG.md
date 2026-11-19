@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- 개조식 `stepIndent`(CLI `--step-indent`, MCP `step_indent`): 단계마다 1칸(5mm)씩 들여쓴다 — 장 띠 0·절 띠 1칸·□ 2칸·○ 3칸·- 4칸. ※ 참고는 ○ 위치, □ 아래 데이터 표는 □ 위치에서 시작한다. 기본 꺼짐.
+- 개조식 `stepIndent`(CLI `--step-indent`, MCP `step_indent`): 단계마다 1칸(16pt 글자 폭)씩 들여쓴다 — 장 띠 0·절 띠 1칸·□ 2칸·○ 3칸·- 4칸. ※ 참고는 - 와 같은 자리, □ 아래 데이터 표는 □ 위치에서 시작한다. 기본 꺼짐.
 - 개조식 `stepSpacing`(CLI `--step-spacing`, MCP `step_spacing`): □·○·- 줄간격 200%, 장·절 띠 앞 300%, □ 앞 250%를 문단 위 간격으로 낸다. 기본 꺼짐. 두 옵션은 생성 뒤 header·section 을 손으로 고치던 후처리를 생성기 안으로 옮긴 것이다.
 
 ## [4.25.2] - 2026-11-19

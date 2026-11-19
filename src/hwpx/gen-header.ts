@@ -5,7 +5,7 @@
 import { type ResolvedGongmun, levelIndent, levelMarkerHeight, markerWidth, needsGaejosikAssets, usesAsteriskThird, usesReportFonts } from "./gongmun.js"
 import { KordocError, VERSION } from "../utils.js"
 import { GJ_CHAR_APPROVAL, GJ_CHAR_TITLE_BAR, GONGMUN_APPROVAL_CHAR, GONGMUN_TBL_PT, GONGMUN_TITLE_BAR_CHAR, charVariantBase } from "./gen-ids.js"
-import { GAEJOSIK_STEP_LINE_SPACING, GAEJOSIK_STEP_UNIT, gaejosikStepSpaceBefore, gaejosikSizes, gaejosikSpaceBefore, gaejosikChamIndent, gaejosikTocItemIndent, GAEJOSIK_COLORS } from "./gaejosik.js"
+import { GAEJOSIK_STEP_LINE_SPACING, GAEJOSIK_STEP_UNIT, gaejosikStepSpaceBefore, gaejosikStepChamGap, gaejosikSizes, gaejosikSpaceBefore, gaejosikChamIndent, gaejosikTocItemIndent, GAEJOSIK_COLORS } from "./gaejosik.js"
 import {
   NS_HEAD, NS_OPF, NS_HPF, NS_OCF, NS_PARA, NS_CORE,
   CHAR_TABLE_HEADER, CHAR_QUOTE,
@@ -268,8 +268,11 @@ function buildParaProperties(gongmun: ResolvedGongmun | null, listIndentVariants
   {
     const cham = gaejosikChamIndent(gongmun.bodyHeight, gongmun.sizes, gongmun.stepIndent)
     const toc = gaejosikTocItemIndent(gongmun.bodyHeight, gongmun.sizes)
+    const chamGap = gaejosikStepChamGap(gongmun.bodyHeight, gongmun.sizes)
     base.push(
-      paraPr(GJ_PARA_CHAM, { align: "LEFT", lineSpacing: ls, left: cham.left, indent: cham.indent, spaceBefore: gaejosikSpaceBefore(3, gongmun.bodyHeight), keepWord: true, autoTab: true }),
+      paraPr(GJ_PARA_CHAM, gongmun.stepSpacing
+        ? { align: "LEFT", lineSpacing: lsList, left: cham.left, indent: cham.indent, spaceBefore: chamGap.before, spaceAfter: chamGap.after, keepWord: true, autoTab: true }
+        : { align: "LEFT", lineSpacing: ls, left: cham.left, indent: cham.indent, spaceBefore: gaejosikSpaceBefore(3, gongmun.bodyHeight), keepWord: true, autoTab: true }),
       paraPr(GJ_PARA_COVER, { align: "CENTER", lineSpacing: 130, keepWord: true }),
       paraPr(GJ_PARA_TOC_ITEM, { align: "LEFT", lineSpacing: 160, left: toc.left, indent: toc.indent, spaceBefore: 1800, keepWord: true }),
       // 장 헤더는 다음 문단과 같은 쪽에 — 쪽 하단 고아 헤더 방지 (실렌더 확인 이슈)

@@ -102,8 +102,8 @@ export function gaejosikLevelIndent(depth: number, bodyHeight: number, sizes: Ga
   return { left: stepIndent ? gaejosikStepLeft(depth) : left, indent: -markerWidth(gaejosikMarker(depth, bullet2), h) }
 }
 
-/** 단계별 계단 들여쓰기(stepIndent)의 1칸 — 5mm */
-export const GAEJOSIK_STEP_UNIT = mmToHwpunit(5)
+/** 단계별 계단 들여쓰기(stepIndent)의 1칸 — 휴먼명조 16pt 한 글자 폭(전각 = 글자 크기, 1600 HWPUNIT) */
+export const GAEJOSIK_STEP_UNIT = 1600
 
 /** stepIndent 의 단계별 왼쪽 여백 — □(0) 2칸 / ○(1) 3칸 / -(2) 4칸 / ㆍ(3+) 5칸 이상. 장 띠 0·절 띠 1칸은 따로 */
 export function gaejosikStepLeft(depth: number): number {
@@ -123,11 +123,17 @@ export function gaejosikStepSpaceBefore(kind: "band" | "dae" | "other", bodyHeig
   return Math.round((extra / 100) * bodyHeight)
 }
 
+/** stepSpacing 의 ※ 문단 위·아래 간격(HWPUNIT) — ※ 글자 높이의 180%·220% 고정 */
+export function gaejosikStepChamGap(bodyHeight: number, sizes: GaejosikSizeOverrides = {}): { before: number; after: number } {
+  const cham = gaejosikSizes(bodyHeight, sizes).cham
+  return { before: Math.round(cham * 1.8), after: Math.round(cham * 2.2) }
+}
+
 /** ※ 참고 문단 들여쓰기 — 실측: 선행 공백 5칸(13pt) ≈ 2.5×cham폭 */
 export function gaejosikChamIndent(bodyHeight: number, sizes: GaejosikSizeOverrides = {}, stepIndent = false): { left: number; indent: number } {
   const cham = gaejosikSizes(bodyHeight, sizes).cham
-  // stepIndent: ※ 는 ○ 위치(3칸)에서 시작
-  return { left: stepIndent ? gaejosikStepLeft(1) : Math.round(2.5 * cham), indent: -markerWidth("※", cham) }
+  // stepIndent: ※ 는 - 와 같은 자리(4칸)에서 시작
+  return { left: stepIndent ? gaejosikStepLeft(2) : Math.round(2.5 * cham), indent: -markerWidth("※", cham) }
 }
 
 /**

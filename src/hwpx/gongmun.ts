@@ -114,7 +114,7 @@ export interface GongmunOptions {
   /** 개조식 장 헤더 제목 칸을 글자 폭에 맞춤. 기본: 꺼짐(제목 칸이 본문 폭까지) */
   chapterFit?: boolean
   /**
-   * 개조식 단계별 계단 들여쓰기 — 장 띠 0 / 절 띠 1칸 / □ 2칸 / ○ 3칸 / - 4칸 / ㆍ 5칸(1칸 = 5mm).
+   * 개조식 단계별 계단 들여쓰기 — 장 띠 0 / 절 띠 1칸 / □ 2칸 / ○ 3칸 / - 4칸 / ㆍ 5칸(1칸 = 16pt 한 글자 폭).
    * □ 아래 데이터 표는 □ 위치(2칸)에서 시작해 오른쪽 끝에 맞추고, ※ 참고 줄은 ○ 위치(3칸). 개조식 전용, 기본 꺼짐
    */
   stepIndent?: boolean
@@ -521,7 +521,8 @@ export function resolveGongmun(input: GongmunOptions): ResolvedGongmun {
     checklist: resolveChecklist(opts.checklist, preset),
     // 개조식 목차는 표지와 함께(표지 없는 개조식은 첫 쪽이 제목 상자 — 목차 쪽만 앞에 서지 않게)
     toc: preset !== "press" && (opts.toc ?? (gaejosik ? coverOn : ministry)),
-    fonts: opts.fonts ?? {},
+    // stepIndent·stepSpacing(개조식)이면 ※ 참고 글꼴 기본이 맑은 고딕(사용자 지정 2026-11-19) — fonts.ref 로 덮어쓸 수 있다
+    fonts: gaejosik && (opts.stepIndent || opts.stepSpacing) ? { ref: "맑은 고딕", ...(opts.fonts ?? {}) } : (opts.fonts ?? {}),
     sizes: opts.sizes ?? {},
     levels: resolveLevels(opts.levels, Math.round(bodyPt * 100)),
     // 쪽번호 — 보고서 계열 관행(실측: 2_보고서 양식·추진계획·공고문 전부 하단 중앙)
