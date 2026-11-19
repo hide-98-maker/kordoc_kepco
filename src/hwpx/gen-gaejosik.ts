@@ -303,7 +303,7 @@ export const GJ_UNIT_RE = /^\(\s*단위\s*[:：]/
 export const GJ_SOURCE_RE = /^(?:※\s*)?(?:자료|출처)\s*[:：]/
 
 /** 개조식 추가 글자 모양 id — 절 띠 번호·표 캡션·단위 줄(쓰일 때만 헤더에 낸다) */
-export interface GaejosikExtraChars { sectionNum: number; caption: number; unit: number; /** 한전 개조식 □ 첫 괄호 글자 모양 */ kepcoParen?: number }
+export interface GaejosikExtraChars { sectionNum: number; caption: number; unit: number; /** 한전 개조식 □ 첫 괄호 글자 모양 */ kepcoParen?: number; /** 시사점 ❚·제목, 결론 띠 */ kepcoBar?: number; kepcoBoxTitle?: number; kepcoConclusion?: number }
 
 /** 원고에 절 띠·캡션·단위 줄이 있는지 — 없으면 추가 글자 모양을 내지 않는다(기존 산출물 불변) */
 export function gaejosikNeedsExtraChars(blocks: MdBlock[]): boolean {

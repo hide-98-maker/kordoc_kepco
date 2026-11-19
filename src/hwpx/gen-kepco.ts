@@ -40,13 +40,13 @@ export function gaejosikExtraParaIds(g: Pick<ResolvedGongmun, "stepIndent" | "st
   const sectionBand = g.stepIndent || g.stepSpacing ? next++ : undefined
   let attach: KepcoAttachParaIds | undefined
   if (g.kepco) {
-    const first = next++, nxt = next++, hostDae = next++, hostOther = next++
+    const first = next++, nxt = next++, hostDae = next++, hostOther = next++, boxFirst = next++, boxNext = next++
     const twins: Record<number, Record<number, number>> = {}
     for (const pct of KEPCO_TWIN_SPACINGS) {
       twins[pct] = {}
       for (const b of KEPCO_TWIN_BASES) twins[pct][b] = next++
     }
-    attach = { first, next: nxt, hostDae, hostOther, twins }
+    attach = { first, next: nxt, hostDae, hostOther, boxFirst, boxNext, twins }
   }
   return { sectionBand, attach }
 }
@@ -85,6 +85,8 @@ export function buildKepcoAttachTitle(no: string, title: string, bodyWidth: numb
 /** 목록 문단 paraPr 둘(첫 줄·다음 줄) — gen-header 가 변형 paraPr 뒤에 붙이고 gen-section 이 같은 식으로 id 를 찾는다 */
 export interface KepcoAttachParaIds {
   first: number; next: number; hostDae: number; hostOther: number
+  /** 시사점 상자 본문 — 첫 줄(• 내어쓰기)·이어지는 줄 */
+  boxFirst: number; boxNext: number
   /** 줄간격 짝 paraPr — twins[줄간격][원래 paraPr id] = 짝 id. 다음 문단에 따라 앞 문단 줄간격만 바꾼다 */
   twins: Record<number, Record<number, number>>
 }
@@ -230,3 +232,89 @@ export function buildKepcoApprovalCover(title: string, g: ResolvedGongmun, bfReg
   if (who) out.push(...blankLines(1, CHAR_NORMAL), textPara(`작성자 : ${who}${a.phone ? ` (☎ ${a.phone})` : ""}`, GONGMUN_CENTER, CHAR_NORMAL))
   return out
 }
+
+// ─── 시사점 상자 · 결론 띠 ───────────────────────────
+
+/** `#### 시사점` 제목인지 — 빈칸 무시 */
+export function isInsightHeading(text: string): boolean {
+  return /^시\s*사\s*점$/.test(text.trim())
+}
+
+/** 4글자 이하 제목은 레퍼런스처럼 글자 사이를 띄운다 — "시사점" → "시 사 점" */
+function spacedTitle(t: string): string {
+  const s = t.replace(/\s+/g, "")
+  return s.length <= 4 ? [...s].join(" ") : t.trim()
+}
+
+export interface KepcoBoxIds {
+  /** ❚ 막대 — 맑은 고딕 15pt #3057B9 */
+  bar: number
+  /** 상자 제목 — 맑은 고딕 14pt 굵게 */
+  title: number
+  /** 상자 본문 — 맑은 고딕 12pt(표 글꼴)와 굵게 */
+  body: number
+  bodyBold: number
+  /** 상자 본문 paraPr — 첫 줄(• 내어쓰기)·이어지는 줄 */
+  paraFirst: number
+  paraNext: number
+}
+
+const BOX_GRAY: ["0.12 mm", string] = ["0.12 mm", "#A6A6A6"]
+const BOX_SIDE_W = 4982
+const BOX_TITLE_W = 14839
+const BOX_TOP_H = 608
+const BOX_TOP2_H = 1174
+
+/**
+ * 시사점 상자 — 레퍼런스 3×3 표: 제목 칸("❚ 시 사 점 ❚")이 위 테두리를 끊고 앉고, 아래 칸(3칸 병합)에 목록.
+ * 선은 0.12mm #A6A6A6, 본문 맑은 고딕 12pt 줄간격 220%, 항목은 "• (괄호 굵게) 내용". 하위 항목은 이어지는 줄.
+ */
+export function buildKepcoInsightBox(title: string, items: { text: string; depth: number }[], bodyWidth: number, bfReg: TableBfRegistry, ids: KepcoBoxIds): string {
+  const W = bodyWidth - 512
+  const rightW = W - BOX_SIDE_W - BOX_TITLE_W
+  const bf = (s: Partial<Record<"t" | "b" | "l" | "r", typeof BOX_GRAY>>) => bfReg.get({ t: s.t ?? "none", b: s.b ?? "none", l: s.l ?? "none", r: s.r ?? "none" })
+  const empty = `<hp:p paraPrIDRef="${GONGMUN_CENTER}" styleIDRef="0"><hp:run charPrIDRef="${ids.body}"><hp:t></hp:t></hp:run></hp:p>`
+  const titlePara = `<hp:p paraPrIDRef="${GONGMUN_CENTER}" styleIDRef="0">`
+    + `<hp:run charPrIDRef="${ids.bar}"><hp:t>❚</hp:t></hp:run>`
+    + `<hp:run charPrIDRef="${ids.title}"><hp:t> ${escapeTextXml(spacedTitle(title))} </hp:t></hp:run>`
+    + `<hp:run charPrIDRef="${ids.bar}"><hp:t>❚</hp:t></hp:run></hp:p>`
+  const bodyParas = items.map((it) => {
+    if (it.depth > 0) return `<hp:p paraPrIDRef="${ids.paraNext}" styleIDRef="0"><hp:run charPrIDRef="${ids.body}"><hp:t>${escapeTextXml(it.text)}</hp:t></hp:run></hp:p>`
+    const paren = splitLeadParen(it.text)
+    const lead = paren ? `<hp:run charPrIDRef="${ids.bodyBold}"><hp:t>${escapeTextXml(paren[0])}</hp:t></hp:run><hp:run charPrIDRef="${ids.body}"><hp:t> ${escapeTextXml(paren[1])}</hp:t></hp:run>`
+      : `<hp:run charPrIDRef="${ids.body}"><hp:t>${escapeTextXml(it.text)}</hp:t></hp:run>`
+    return `<hp:p paraPrIDRef="${ids.paraFirst}" styleIDRef="0"><hp:run charPrIDRef="${ids.body}"><hp:t>•<hp:tab width="600" leader="0" type="1"/></hp:t></hp:run>${lead}</hp:p>`
+  }).join("")
+  const bodyH = Math.max(1, items.length) * Math.round(1200 * 2.2) + 282
+  const row0 = tc({ bf: bf({ b: BOX_GRAY }), row: 0, col: 0, w: BOX_SIDE_W, h: BOX_TOP_H, paras: empty })
+    + tc({ bf: bf({}), row: 0, col: 1, w: BOX_TITLE_W, h: BOX_TOP_H + BOX_TOP2_H, rowSpan: 2, paras: titlePara, name: "__kordoc_insight" })
+    + tc({ bf: bf({ b: BOX_GRAY }), row: 0, col: 2, w: rightW, h: BOX_TOP_H, paras: empty })
+  const row1 = tc({ bf: bf({ l: BOX_GRAY, t: BOX_GRAY }), row: 1, col: 0, w: BOX_SIDE_W, h: BOX_TOP2_H, paras: empty })
+    + tc({ bf: bf({ r: BOX_GRAY, t: BOX_GRAY }), row: 1, col: 2, w: rightW, h: BOX_TOP2_H, paras: empty })
+  const row2 = tc({ bf: bf({ l: BOX_GRAY, r: BOX_GRAY, b: BOX_GRAY }), row: 2, col: 0, w: W, h: bodyH, colSpan: 3, paras: bodyParas, vAlign: "TOP" })
+  const table = tbl([row0, row1, row2], W, BOX_TOP_H + BOX_TOP2_H + bodyH, 3)
+  return `<hp:p paraPrIDRef="${GONGMUN_RIGHT}" styleIDRef="0"><hp:run charPrIDRef="${CHAR_NORMAL}">${table}</hp:run></hp:p>`
+}
+
+/** 결론 한 줄 — `>> 문장` 원고 */
+export function parseConclusion(text: string): string | null {
+  const m = /^>>\s*(.+)$/s.exec(text.trim())
+  return m ? m[1].trim() : null
+}
+
+/**
+ * 결론 띠 — 레퍼런스 1×1 표: 위아래 0.7mm #808080, 양옆 선 없음, #F2F2F2 채움,
+ * 한컴 윤고딕 740 15pt 굵게 #3A3C84 가운데.
+ */
+export function buildKepcoConclusion(text: string, bodyWidth: number, bfReg: TableBfRegistry, charId: number): string {
+  const W = bodyWidth - 353
+  const H = 3148
+  const bf = bfReg.get({ t: ["0.7 mm", "#808080"], b: ["0.7 mm", "#808080"], l: "none", r: "none", fill: "#F2F2F2" })
+  const para = `<hp:p paraPrIDRef="${GONGMUN_CENTER}" styleIDRef="0"><hp:run charPrIDRef="${charId}"><hp:t>${escapeTextXml(text)}</hp:t></hp:run></hp:p>`
+  const table = tbl([tc({ bf, row: 0, col: 0, w: W, h: H, paras: para, name: "__kordoc_conclusion" })], W, H, 1)
+  return `<hp:p paraPrIDRef="${GONGMUN_RIGHT}" styleIDRef="0"><hp:run charPrIDRef="${CHAR_NORMAL}">${table}</hp:run></hp:p>`
+}
+
+/** 상자·결론 글자 색 — 레퍼런스 */
+export const KEPCO_BAR_COLOR = "#3057B9"
+export const KEPCO_CONCLUSION_COLOR = "#3A3C84"

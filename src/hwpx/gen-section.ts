@@ -8,7 +8,7 @@
  */
 
 import { type ResolvedGongmun, levelIndent, mmToHwpunit, needsGaejosikAssets, usesReportFonts } from "./gongmun.js"
-import { kepcoSpacingBefore, splitLeadParen, parseAttachHeading, buildKepcoHeading, buildKepcoAttachTitle, buildKepcoAttachList, buildKepcoApprovalCover, gaejosikExtraParaIds } from "./gen-kepco.js"
+import { isInsightHeading, buildKepcoInsightBox, parseConclusion, buildKepcoConclusion, kepcoSpacingBefore, splitLeadParen, parseAttachHeading, buildKepcoHeading, buildKepcoAttachTitle, buildKepcoAttachList, buildKepcoApprovalCover, gaejosikExtraParaIds } from "./gen-kepco.js"
 import { gaejosikStepLeft, GAEJOSIK_STEP_UNIT, stripChapterNumber, gaejosikSizes, gaejosikBodyWidth, GAEJOSIK_BASE_WIDTH } from "./gaejosik.js"
 import { type GaejosikSummaryPlan, buildGaejosikSummary, buildGaejosikCover, coverMetaBlocks, buildGaejosikToc, buildGaejosikChapter, buildGaejosikBodyTitle, gaejosikTitleH1, resetGjTableIds, buildGaejosikSection, GJ_SECTION_RE, GJ_CAPTION_RE, GJ_UNIT_RE, GJ_SOURCE_RE, type GaejosikExtraChars } from "./gen-gaejosik.js"
 import {
@@ -152,6 +152,9 @@ interface SectionCtx {
   /** 다음 블록이 □ 인 붙임 제목 블록 — 띠 아래 간격을 □ 앞 간격만큼 덜어 낸다 */
   kepcoAttachNextDae: Set<number>
   kepcoAttachSeen: boolean
+  /** 시사점 상자가 읽는 원고 블록과 소비한 목록 블록 */
+  kepcoBlocks: MdBlock[]
+  kepcoSkip: Set<number>
   /** 이미지 placeholder 레지스트리 (v4.0.5) — null이면 종전 alt 텍스트 폴백 */
   images: ImageRegistry | null
   /** 파생 플래그·스타일 */
@@ -389,10 +392,25 @@ function renderHeading(block: MdBlock, blockIdx: number, ctx: SectionCtx): strin
           : {})
       // levels 옵션이 □(0단계)를 지정했으면 그 글꼴·크기가 프리셋 실측값보다 우선
       const lv0 = ctx.levelIds?.[0]
-      if (lv0) return markedParagraph("□", block.text || "", GONGMUN_LIST_BASE, lv0.normal, gongmun!.bodyHeight / 2,
-        (id) => (id === CHAR_BOLD ? lv0.bold : id === CHAR_NORMAL ? lv0.normal : id), 0, ctx.gjChars?.kepcoParen)
+      // 한전 개조식 □ 문장은 전체 굵게(사용자 지정) — 괄호만 전용 글자 모양
+      const daeChar = lv0 ? (gongmun!.kepco ? lv0.bold : lv0.normal) : 0
+      if (lv0) return markedParagraph("□", block.text || "", GONGMUN_LIST_BASE, daeChar, gongmun!.bodyHeight / 2,
+        (id) => (id === CHAR_BOLD ? lv0.bold : id === CHAR_NORMAL ? daeChar : id), 0, ctx.gjChars?.kepcoParen)
       return markedParagraph("□", block.text || "", GONGMUN_LIST_BASE, GJ_CHAR_DAE, gongmun!.bodyHeight / 2,
         (id) => (id === CHAR_BOLD ? GJ_CHAR_DAE_BOLD : id), 0, ctx.gjChars?.kepcoParen)
+    }
+    // 한전 개조식 "#### 시사점" + 바로 뒤 목록 → 시사점 상자(목록은 상자가 소비)
+    if (gongmun!.kepco && isInsightHeading(block.text || "") && bfReg && ctx.gjChars?.kepcoBar !== undefined) {
+      const items: { text: string; depth: number }[] = []
+      for (let i = blockIdx + 1; i < ctx.kepcoBlocks.length && ctx.kepcoBlocks[i].type === "list_item"; i++) {
+        items.push({ text: (ctx.kepcoBlocks[i].text || "").trim(), depth: ctx.kepcoBlocks[i].indent || 0 })
+        ctx.kepcoSkip.add(i)
+      }
+      const ids = gaejosikExtraParaIds(gongmun!, ctx.gongmunList?.indentVariants.length ?? 0, GONGMUN_LIST_VARIANT_BASE).attach!
+      return buildKepcoInsightBox(block.text || "", items, gjBodyW, bfReg, {
+        bar: ctx.gjChars.kepcoBar, title: ctx.gjChars.kepcoBoxTitle!, body: GJ_CHAR_TABLE, bodyBold: GJ_CHAR_TABLE_BOLD,
+        paraFirst: ids.boxFirst, paraNext: ids.boxNext,
+      })
     }
     // h4~h6 → ○/ㅇ 중항목 (bullet2) — levels 가 1단계를 지정했으면 그 값
     const lv1 = ctx.levelIds?.[1]
@@ -419,6 +437,9 @@ function renderHeading(block: MdBlock, blockIdx: number, ctx: SectionCtx): strin
 
 function renderParagraph(block: MdBlock, blockIdx: number, ctx: SectionCtx, prevType: string | null = null): string {
   const { gongmun, measured, fit, vBase } = ctx
+  // 한전 개조식 ">> 문장" → 결론 띠
+  const concl = gongmun?.kepco && ctx.bfReg && ctx.gjChars?.kepcoConclusion !== undefined ? parseConclusion(block.text || "") : null
+  if (concl) return buildKepcoConclusion(concl, ctx.gjBodyW, ctx.bfReg!, ctx.gjChars!.kepcoConclusion!)
   // 이미지 참조 문단 (v4.0.5) — `![alt](url)`만으로 구성된 문단은 placeholder
   // <hp:pic>로 방출해 참조·순서를 왕복 보존. 텍스트 혼재·수용 불가 url은 종전 폴백
   if (ctx.images) {
@@ -546,8 +567,10 @@ function renderListItem(block: MdBlock, blockIdx: number, ctx: SectionCtx): stri
     // fit 변형은 이 depth 를 제외하므로(gen-gongmun-fit) 본문·굵게만 전용 쌍으로 치환
     const lv = ctx.levelIds?.[depth]
     if (lv) {
-      listCharPr = lv.normal
-      mapId = (id) => (id === CHAR_BOLD ? lv.bold : id === CHAR_NORMAL ? lv.normal : id)
+      // 한전 개조식 □(0단계)는 문장 전체 굵게
+      const base = gongmun.kepco && depth === 0 ? lv.bold : lv.normal
+      listCharPr = base
+      mapId = (id) => (id === CHAR_BOLD ? lv.bold : id === CHAR_NORMAL ? base : id)
     }
     return marker
       ? markedParagraph(marker, content, listParaPr, listCharPr, gongmun.bodyHeight / 2, mapId, 0, depth === 0 ? ctx.gjChars?.kepcoParen : undefined)
@@ -709,6 +732,8 @@ export function blocksToSectionXml(
     kepcoAttachListPending: true,
     kepcoAttachNextDae: kepcoAttachNextDae(blocks, gongmun, gongmunList),
     kepcoAttachSeen: false,
+    kepcoBlocks: blocks,
+    kepcoSkip: new Set<number>(),
     pendingPageBreak: false,
     pendingNewNum: false,
     // 순서 있는 목록 카운터 — indent 레벨별 별도 유지. 다른 블록 만나면 해당 레벨 리셋.
@@ -721,6 +746,7 @@ export function blocksToSectionXml(
 
   for (let blockIdx = 0; blockIdx < blocks.length; blockIdx++) {
     const block = blocks[blockIdx]
+    if (ctx.kepcoSkip.has(blockIdx)) continue // 시사점 상자가 소비한 목록
     if (ctx.coverMetaIdxs.has(blockIdx)) continue // 표지가 받은 날짜·기관명 — 목록 번호도 세지 않는다
 
     // 순서 있는 list_item이 아니면 카운터 전부 리셋 (연속되지 않은 목록은 다시 1부터)

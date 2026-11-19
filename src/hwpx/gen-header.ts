@@ -342,6 +342,12 @@ function buildParaProperties(gongmun: ResolvedGongmun | null, listIndentVariants
       paraPr(extra.attach.hostOther, { align: "LEFT", lineSpacing: ls, spaceAfter: Math.max(0, attachGap - pb), keepWord: true, keepWithNext: true }),
       // * 바로 앞 문단용 180% 짝(□ ○ - ㆍ) — 위 문단과 * 사이 180%
     )
+    // 시사점 상자 본문 — 맑은 고딕 12pt 줄간격 220%(레퍼런스), • 뒤 탭이 내어쓰기 자리로
+    const boxHang = markerWidth("•", 1200)
+    base.push(
+      paraPr(extra.attach.boxFirst, { align: "LEFT", lineSpacing: 220, left: 0, indent: -boxHang, keepWord: true, autoTab: true }),
+      paraPr(extra.attach.boxNext, { align: "LEFT", lineSpacing: 220, left: boxHang, indent: 0, keepWord: true }),
+    )
     // 줄간격 짝 — 원래 paraPr XML 을 복제해 id·줄간격만 바꾼다(* 앞 180·□ 앞 250·장 제목 앞 300)
     for (const pct of KEPCO_TWIN_SPACINGS) {
       for (const b of KEPCO_TWIN_BASES) {

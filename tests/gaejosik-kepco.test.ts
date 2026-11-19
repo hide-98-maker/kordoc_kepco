@@ -139,6 +139,33 @@ describe("한전 개조식", () => {
     assert.equal(ls(p.match(/paraPrIDRef="(\d+)"/)![1]), 250, "둘째 □ 위 문장 → 250%")
   })
 
+  it("□ 문장 전체 굵게 — 괄호 뒤 본문도 굵은 글자 모양", async () => {
+    const { sec, hdr } = await parts(kepco)
+    const m = /<hp:t>\(특성\)<\/hp:t><\/hp:run><hp:run charPrIDRef="(\d+)"><hp:t> <\/hp:t><\/hp:run><hp:run charPrIDRef="(\d+)"><hp:t>단선 시/.exec(sec)
+    assert.ok(m, "괄호 뒤 본문 run")
+    const b = hdr.slice(hdr.indexOf(`<hh:charPr id="${m![2]}"`), hdr.indexOf("</hh:charPr>", hdr.indexOf(`<hh:charPr id="${m![2]}"`)))
+    assert.ok(b.includes('bold="1"') && b.includes('height="1600"'), b)
+  })
+
+  it("#### 시사점 + 목록 → 시사점 상자, >> 문장 → 결론 띠", async () => {
+    const src = "## 현황\n\n### (개요) 내용\n\n#### 시사점\n\n- (VCB 개방) 신규만 확인\n  - 정전 시 민원\n- (책임분계점) 비용 예상\n\n>> 대안 필요\n\n## 다음\n\n### 항목\n"
+    const z = await JSZip.loadAsync(await markdownToHwpx(src, { gongmun: kepco as never }))
+    const sec = await z.file("Contents/section0.xml")!.async("text")
+    const hdr = await z.file("Contents/header.xml")!.async("text")
+    assert.ok(sec.includes('name="__kordoc_insight"'))
+    assert.ok(/<hp:t> 시 사 점 <\/hp:t>/.test(sec))
+    // 목록은 상자 안에만 — ○ 문단으로 따로 나오지 않는다
+    assert.equal((sec.match(/신규만 확인/g) ?? []).length, 1)
+    assert.ok(/<hp:t>•<hp:tab[^>]*\/><\/hp:t><\/hp:run><hp:run charPrIDRef="\d+"><hp:t>\(VCB 개방\)<\/hp:t>/.test(sec))
+    assert.ok(sec.includes("정전 시 민원"))
+    assert.ok(sec.includes('name="__kordoc_conclusion"') && sec.includes("<hp:t>대안 필요</hp:t>"))
+    assert.ok(!sec.includes("&gt;&gt;"), "결론 표지 >> 는 남지 않는다")
+    assert.ok(hdr.includes('textColor="#3A3C84"') && hdr.includes('textColor="#3057B9"'))
+    // 일반 개조식에서는 그대로(○ 제목 + 목록)
+    const plain = await (await JSZip.loadAsync(await markdownToHwpx(src, { gongmun: { preset: "gaejosik", cover: false } }))).file("Contents/section0.xml")!.async("text")
+    assert.ok(!plain.includes("__kordoc_insight"))
+  })
+
   it("표 — 글자처럼 취급 + 오른쪽 정렬, 한 쪽을 넘는 표는 경고", async () => {
     const { sec } = await parts({ ...kepco, approvalCover: undefined })
     assert.ok(!sec.includes('treatAsChar="0"'))

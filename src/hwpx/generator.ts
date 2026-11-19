@@ -30,7 +30,7 @@ import { buildProfileRemap, type FormatProfile } from "./gen-profile.js"
 import { docframeActive, docframeCharPrXmls, docframeIds } from "./gen-docframe.js"
 import { levelCharIds, levelFontFaces, levelCharPrXmls } from "./gen-levels.js"
 import { ImageRegistry } from "./gen-image.js"
-import { KEPCO_PAREN_FONT, KEPCO_PAREN_COLOR } from "./gen-kepco.js"
+import { KEPCO_PAREN_FONT, KEPCO_PAREN_COLOR, KEPCO_BAR_COLOR, KEPCO_CONCLUSION_COLOR } from "./gen-kepco.js"
 import { GJ_SUMMARY_FONT, planGaejosikSummary, gaejosikNeedsExtraChars } from "./gen-gaejosik.js"
 import { StyleRegistry } from "./style-registry.js"
 import { buildGongmunSectionV5, usesV5Engine } from "./gen-gongmun.js"
@@ -206,7 +206,7 @@ export async function markdownToHwpx(
   // 개조식 절 띠 번호(HY헤드라인M □ 크기 흰 글자)·표 캡션(표 글꼴 +1pt)·단위 줄(표 글꼴 -2pt) — 원고에 있을 때만 요약 상자 다음 id
   const gjExtraBase = lvBase + lvXmls.length + sumXmls.length
   const gjChars = gongmun?.preset === "gaejosik" && (gaejosikNeedsExtraChars(blocks) || gongmun.kepco)
-    ? { sectionNum: gjExtraBase, caption: gjExtraBase + 1, unit: gjExtraBase + 2, ...(gongmun.kepco ? { kepcoParen: gjExtraBase + 3 } : {}) } : null
+    ? { sectionNum: gjExtraBase, caption: gjExtraBase + 1, unit: gjExtraBase + 2, ...(gongmun.kepco ? { kepcoParen: gjExtraBase + 3, kepcoBar: gjExtraBase + 4, kepcoBoxTitle: gjExtraBase + 5, kepcoConclusion: gjExtraBase + 6 } : {}) } : null
   // 한전 개조식 □ 첫 괄호 글꼴 — 레벨·요약 글꼴 뒤에 붙인다
   const kepcoFonts = gongmun?.kepco ? [KEPCO_PAREN_FONT] : []
   const kepcoFontId = staticFontNext(gongmun) + (remap?.fontFaces.length ?? 0) + lvFonts.length + sumFonts.length
@@ -215,7 +215,13 @@ export async function markdownToHwpx(
     charPr(gjChars.sectionNum, gjSz.dae, false, false, 3, "#FFFFFF"),
     charPr(gjChars.caption, gjSz.table + 100, false, false, 7),
     charPr(gjChars.unit, gjSz.table - 200, false, false, 7),
-    ...(gjChars.kepcoParen !== undefined ? [charPr(gjChars.kepcoParen, gongmun!.levels?.[0]?.height ?? gjSz.dae, true, false, kepcoFontId, KEPCO_PAREN_COLOR, 100, kepcoFontId)] : []),
+    ...(gjChars.kepcoParen !== undefined ? [
+      charPr(gjChars.kepcoParen, gongmun!.levels?.[0]?.height ?? gjSz.dae, true, false, kepcoFontId, KEPCO_PAREN_COLOR, 100, kepcoFontId),
+      // 시사점 상자 ❚(맑은 고딕 15 #3057B9)·제목(맑은 고딕 14 굵게), 결론 띠(한컴 윤고딕 740 15 굵게 #3A3C84) — 레퍼런스. 표 글꼴(7)=맑은 고딕
+      charPr(gjChars.kepcoBar!, 1500, false, false, 7, KEPCO_BAR_COLOR),
+      charPr(gjChars.kepcoBoxTitle!, 1400, true, false, 7),
+      charPr(gjChars.kepcoConclusion!, 1500, true, false, kepcoFontId, KEPCO_CONCLUSION_COLOR, 100, kepcoFontId),
+    ] : []),
   ] : []
   const chartParts: ChartPart[] = []
   // 이미지 레지스트리 (v4.0.5 placeholder → v4.5.0 실데이터) — images 옵션 바이트·
