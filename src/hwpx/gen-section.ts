@@ -9,7 +9,7 @@
 
 import { type ResolvedGongmun, levelIndent, mmToHwpunit, needsGaejosikAssets, usesReportFonts } from "./gongmun.js"
 import { parseAttachHeading, buildKepcoHeading, buildKepcoAttachTitle, buildKepcoAttachList, buildKepcoApprovalCover, gaejosikExtraParaIds } from "./gen-kepco.js"
-import { GAEJOSIK_STEP_UNIT, stripChapterNumber, gaejosikSizes, gaejosikBodyWidth, GAEJOSIK_BASE_WIDTH } from "./gaejosik.js"
+import { gaejosikStepLeft, GAEJOSIK_STEP_UNIT, stripChapterNumber, gaejosikSizes, gaejosikBodyWidth, GAEJOSIK_BASE_WIDTH } from "./gaejosik.js"
 import { type GaejosikSummaryPlan, buildGaejosikSummary, buildGaejosikCover, coverMetaBlocks, buildGaejosikToc, buildGaejosikChapter, buildGaejosikBodyTitle, gaejosikTitleH1, resetGjTableIds, buildGaejosikSection, GJ_SECTION_RE, GJ_CAPTION_RE, GJ_UNIT_RE, GJ_SOURCE_RE, type GaejosikExtraChars } from "./gen-gaejosik.js"
 import {
   NS_SECTION, NS_PARA,
@@ -149,6 +149,9 @@ interface SectionCtx {
   kepcoNo: number
   kepcoAttachItems: { no: string; title: string }[]
   kepcoAttachListPending: boolean
+  /** 다음 블록이 □ 인 붙임 제목 블록 — 띠 아래 간격을 □ 앞 간격만큼 덜어 낸다 */
+  kepcoAttachNextDae: Set<number>
+  kepcoAttachSeen: boolean
   /** 이미지 placeholder 레지스트리 (v4.0.5) — null이면 종전 alt 텍스트 폴백 */
   images: ImageRegistry | null
   /** 파생 플래그·스타일 */
@@ -282,6 +285,20 @@ function buildPreamble(blocks: MdBlock[], ctx: SectionCtx): void {
   }
 }
 
+/** 다음 블록이 □(번호 없는 ### 또는 0단계 목록)인 붙임 제목 블록 번호 */
+function kepcoAttachNextDae(blocks: MdBlock[], gongmun: ResolvedGongmun | null, list: GongmunListPlan | null): Set<number> {
+  const out = new Set<number>()
+  if (!gongmun?.kepco) return out
+  blocks.forEach((b, i) => {
+    if (b.type !== "heading" || (b.level ?? 1) !== 2 || !parseAttachHeading(b.text || "")) return
+    const n = blocks[i + 1]
+    if (!n) return
+    const dae = (n.type === "heading" && n.level === 3 && !GJ_SECTION_RE.test((n.text || "").trim())) || (n.type === "list_item" && list?.items.get(i + 1)?.depth === 0)
+    if (dae) out.add(i)
+  })
+  return out
+}
+
 /** 붙임 목록 항목 — 본문 번호(붙임 3-1 같은 하위 번호는 제외, 전부 하위뿐이면 모두) */
 function kepcoAttachItems(blocks: MdBlock[], gongmun: ResolvedGongmun | null): { no: string; title: string }[] {
   if (!gongmun?.kepco) return []
@@ -306,7 +323,8 @@ function markedParagraph(marker: string, content: string, paraPrId: number, char
 /** "※ 내용"·"* 내용" → [부호, 내용]. "**강조**" 의 별표는 부호가 아니다(뒤가 공백일 때만) */
 function refParagraph(text: string, ctx: SectionCtx): string {
   const m = /^(※|\*(?=\s))\s*/.exec(text)
-  const [mk, rest] = m ? [m[1], text.slice(m[0].length)] : ["※", text]
+  // 한전 개조식은 참고 부호를 "*" 로 통일(레퍼런스) — 원고의 ※ 도 * 로
+  const [mk, rest] = m ? [ctx.gongmun?.kepco ? "*" : m[1], text.slice(m[0].length)] : [ctx.gongmun?.refMarker ?? "※", text]
   return markedParagraph(mk, rest, GJ_PARA_CHAM, GJ_CHAR_CHAM, ctx.gongmun!.bodyHeight / 2, ctx.chamMap)
 }
 
@@ -342,7 +360,11 @@ function renderHeading(block: MdBlock, blockIdx: number, ctx: SectionCtx): strin
           head = buildKepcoAttachList(ctx.kepcoAttachItems, list).join("\n  ") + "\n  "
           ctx.kepcoAttachListPending = false
         }
-        return head + buildKepcoAttachTitle(att.no, att.title, gjBodyW, bfReg)
+        const ids = gaejosikExtraParaIds(gongmun!, ctx.gongmunList?.indentVariants.length ?? 0, GONGMUN_LIST_VARIANT_BASE).attach!
+        const host = ctx.kepcoAttachNextDae.has(blockIdx) ? ids.hostDae : ids.hostOther
+        const first = !ctx.kepcoAttachSeen
+        ctx.kepcoAttachSeen = true
+        return head + buildKepcoAttachTitle(att.no, att.title, gjBodyW, bfReg, host, first && !!gongmun!.pageNumbers)
       }
       return buildKepcoHeading(++ctx.kepcoNo, stripChapterNumber(block.text || ""))
     }
@@ -656,7 +678,9 @@ export function blocksToSectionXml(
           tblLeftParaPr: GONGMUN_TBL_LEFT,
           bfRegistry: bfReg ?? undefined,
           rightParaPr: GONGMUN_RIGHT,
-          ...(gongmun.stepIndent ? { extraInset: Math.max(0, 2 * GAEJOSIK_STEP_UNIT - DATA_TABLE_INSET) } : {}),
+          // 한전 개조식 표 — 회색 선·열린 양옆·머리 행과 라벨 열 #F2F2F2 (레퍼런스)
+          ...(gongmun.kepco ? { kepcoGrid: true, headerFill: "#F2F2F2", labelFill: "#F2F2F2" } : {}),
+          ...(gongmun.stepBase ? { extraInset: Math.max(0, gaejosikStepLeft(0, gongmun.stepBase) - DATA_TABLE_INSET) } : {}),
         }
       : null,
     // 개조식 장식표(표지·목차·장헤더·제목박스) 폭 스케일용 본문폭 — margins 오버라이드 대응
@@ -677,6 +701,8 @@ export function blocksToSectionXml(
     kepcoNo: 0,
     kepcoAttachItems: kepcoAttachItems(blocks, gongmun),
     kepcoAttachListPending: true,
+    kepcoAttachNextDae: kepcoAttachNextDae(blocks, gongmun, gongmunList),
+    kepcoAttachSeen: false,
     pendingPageBreak: false,
     pendingNewNum: false,
     // 순서 있는 목록 카운터 — indent 레벨별 별도 유지. 다른 블록 만나면 해당 레벨 리셋.

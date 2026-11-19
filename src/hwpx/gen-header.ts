@@ -242,7 +242,7 @@ function buildParaProperties(gongmun: ResolvedGongmun | null, listIndentVariants
   // 항목 단계별 paraPr (8 ~ 8+7): left/내어쓰기 indent
   for (let d = 0; d < GONGMUN_LIST_LEVELS; d++) {
     // 내어쓰기 폭은 그 단계 글자 크기 기준(levels 오버라이드 반영, v4.12.3)
-    const { left, indent } = levelIndent(d, gongmun.bodyHeight, gongmun.numbering, gongmun.sizes, gongmun.bullet2, usesAsteriskThird(gongmun.preset), levelMarkerHeight(gongmun, d), gongmun.stepIndent)
+    const { left, indent } = levelIndent(d, gongmun.bodyHeight, gongmun.numbering, gongmun.sizes, gongmun.bullet2, usesAsteriskThird(gongmun.preset), levelMarkerHeight(gongmun, d), gongmun.stepBase)
     // 단락 위 간격 — gaejosikSpaceBefore(□ 300/그 외 0). 종전 3000/2000/1200/600(□15/○10/-6/ㆍ3pt)은
     // 「2_보고서 양식」 한 파일의 저장값이었고 v4.9.1 에서 코퍼스 실측(88% 0)으로 교체됐다.
     // 2026-09-06 재검증(서울·gate-fill 428건, hp:case 우선 — default 는 2배 함정): □ 0 96%·200 2%,
@@ -267,7 +267,7 @@ function buildParaProperties(gongmun: ResolvedGongmun | null, listIndentVariants
   // 개조식 전용 paraPr 20~24 (gen-ids GJ_PARA_*) — id 연속성 위해 전 프리셋 방출
   // (비개조식은 ※ 참고(20)만 참조. v4.0.2: 뒤에 부호생략 전용 25~32가 오므로 구멍 금지)
   {
-    const cham = gaejosikChamIndent(gongmun.bodyHeight, gongmun.sizes, gongmun.stepIndent)
+    const cham = gaejosikChamIndent(gongmun.bodyHeight, gongmun.sizes, gongmun.stepBase, gongmun.refMarker)
     const toc = gaejosikTocItemIndent(gongmun.bodyHeight, gongmun.sizes)
     const chamGap = gaejosikStepChamGap(gongmun.bodyHeight, gongmun.sizes)
     base.push(
@@ -285,7 +285,7 @@ function buildParaProperties(gongmun: ResolvedGongmun | null, listIndentVariants
   // 부호 생략(단일 형제) 항목 전용 25~32 — left는 단계 동일·내어쓰기 0 (v4.0.2:
   // 유령 내어쓰기로 둘째 줄이 첫 줄보다 더 들어가던 결함 수정, 실렌더 QA)
   for (let d = 0; d < GONGMUN_LIST_LEVELS; d++) {
-    const { left } = levelIndent(d, gongmun.bodyHeight, gongmun.numbering, gongmun.sizes, gongmun.bullet2, usesAsteriskThird(gongmun.preset), gongmun.bodyHeight, gongmun.stepIndent)
+    const { left } = levelIndent(d, gongmun.bodyHeight, gongmun.numbering, gongmun.sizes, gongmun.bullet2, usesAsteriskThird(gongmun.preset), gongmun.bodyHeight, gongmun.stepBase)
     const sectionGap = gongmun.stepSpacing
       ? gaejosikStepSpaceBefore(d === 0 ? "dae" : "other", gongmun.bodyHeight)
       : gongmun.numbering === "gaejosik" || gongmun.numbering === "report"
@@ -301,7 +301,7 @@ function buildParaProperties(gongmun: ResolvedGongmun | null, listIndentVariants
   // 간격·정렬은 해당 depth 공용 paraPr와 동일, 내어쓰기만 자기 부호폭
   for (let vi = 0; vi < listIndentVariants.length; vi++) {
     const { depth, widthHu } = listIndentVariants[vi]
-    const { left } = levelIndent(depth, gongmun.bodyHeight, gongmun.numbering, gongmun.sizes, gongmun.bullet2, usesAsteriskThird(gongmun.preset), gongmun.bodyHeight, gongmun.stepIndent)
+    const { left } = levelIndent(depth, gongmun.bodyHeight, gongmun.numbering, gongmun.sizes, gongmun.bullet2, usesAsteriskThird(gongmun.preset), gongmun.bodyHeight, gongmun.stepBase)
     const sectionGap = gongmun.stepSpacing
       ? gaejosikStepSpaceBefore(depth === 0 ? "dae" : "other", gongmun.bodyHeight)
       : gongmun.numbering === "gaejosik" || gongmun.numbering === "report"
@@ -321,9 +321,14 @@ function buildParaProperties(gongmun: ResolvedGongmun | null, listIndentVariants
   // 붙임 목록(kepco) — 첫 줄은 "붙 임 " 머리 폭만큼 내어쓰고 나머지 줄은 번호 자리에 맞춘다
   if (extra.attach) {
     const hang = markerWidth("붙 임", gongmun.bodyHeight)
+    const attachGap = gaejosikStepSpaceBefore("band", gongmun.bodyHeight)
+    const daeGap = gongmun.stepSpacing ? gaejosikStepSpaceBefore("dae", gongmun.bodyHeight) : gaejosikSpaceBefore(0, gongmun.bodyHeight)
     base.push(
-      paraPr(extra.attach.first, { align: "LEFT", lineSpacing: lsList, left: hang, indent: -hang, spaceBefore: 600, keepWord: true }),
+      paraPr(extra.attach.first, { align: "LEFT", lineSpacing: lsList, left: 0, indent: -hang, spaceBefore: 600, keepWord: true, autoTab: true }),
       paraPr(extra.attach.next, { align: "LEFT", lineSpacing: lsList, left: hang, indent: 0, keepWord: true }),
+      // 붙임 제목 띠 호스트 — 띠와 첫 본문 사이 300%(띠 앞 간격과 같은 몫): 다음 문단이 □ 면 □ 앞 간격만큼 덜어 낸다
+      paraPr(extra.attach.hostDae, { align: "LEFT", lineSpacing: ls, spaceAfter: Math.max(0, attachGap - daeGap), keepWord: true, keepWithNext: true }),
+      paraPr(extra.attach.hostOther, { align: "LEFT", lineSpacing: ls, spaceAfter: attachGap, keepWord: true, keepWithNext: true }),
     )
   }
   assertSequentialIds(base, "paraPr", 0)

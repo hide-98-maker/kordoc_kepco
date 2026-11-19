@@ -80,6 +80,17 @@ export class TableBfRegistry {
  *  - 헤더행 하변 double(0.5 이중선) — 헤더가 있을 때만
  *  - 그 외 내부 변 thin(0.12)
  */
+/** 한전 개조식 표 선 — 0.12mm 회색(#808080). 레퍼런스(한전 계획보고) 표 전부 */
+const KEPCO_LINE: BorderSide = ["0.12 mm", "#808080"]
+
+/**
+ * 한전 개조식 표 칸 테두리 — 모든 선 0.12mm 회색, 표 양옆 바깥 선은 없음(열린 표), 머리 행·라벨 열 채움은 호출부가.
+ * 실측: 한전 계획보고 레퍼런스 데이터 표·일정 표·사례 표 모두 같은 문법
+ */
+export function kepcoCellSpec(opts: { col: number; colEnd: number; colCnt: number; fill?: string }): CellBfSpec {
+  return { t: KEPCO_LINE, b: KEPCO_LINE, l: opts.col === 0 ? "none" : KEPCO_LINE, r: opts.colEnd === opts.colCnt - 1 ? "none" : KEPCO_LINE, fill: opts.fill }
+}
+
 export function dataCellSpec(opts: {
   row: number
   rowEnd: number // row + rowSpan - 1

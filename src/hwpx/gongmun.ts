@@ -265,6 +265,10 @@ export interface ResolvedGongmun {
   approvalCover: ResolvedApprovalCover | null
   /** 개조식 단계별 계단 들여쓰기(개조식 전용 — 다른 프리셋은 항상 false) */
   stepIndent: boolean
+  /** 계단 들여쓰기에서 □ 의 칸 수 — 꺼짐 0, 개조식 2, 한전 개조식 1 */
+  stepBase: number
+  /** ※ 참고 문단 부호 — 한전 개조식은 "*" */
+  refMarker: string
   /** 개조식 단계별 간격(개조식 전용 — 다른 프리셋은 항상 false) */
   stepSpacing: boolean
   /** h2 장 제목 표기 — 보고서·계획서 'roman', 통지·공고 'number' (v5) */
@@ -528,6 +532,9 @@ function kepcoDefaults(o: GongmunOptions): GongmunOptions {
     fonts: { ref: "맑은 고딕", ...(o.fonts ?? {}) },
     bodyTitleBox: o.bodyTitleBox ?? false,
     toc: o.toc ?? false,
+    // 단계별 들여쓰기·간격(사용자 지정 규칙)은 한전 개조식 기본값
+    stepIndent: o.stepIndent ?? true,
+    stepSpacing: o.stepSpacing ?? true,
     cover: o.cover ?? !!o.approvalCover,
   }
 }
@@ -612,6 +619,8 @@ export function resolveGongmun(input: GongmunOptions): ResolvedGongmun {
     kepco,
     approvalCover: gaejosik && opts.approvalCover ? resolveApprovalCover(opts.approvalCover) : null,
     stepIndent: gaejosik && (opts.stepIndent ?? false),
+    stepBase: gaejosik && opts.stepIndent ? (kepco ? 1 : 2) : 0,
+    refMarker: kepco ? "*" : "※",
     stepSpacing: gaejosik && (opts.stepSpacing ?? false),
     // h2 말머리 — 실측: 보고서 양식 □ 대항목(QA-2), 공고문 아라비아("1. 사업개요", 바이오헬스 실측)
     // v5 라운드 3: 보고서·계획서 기본 band(띠 표) — 서울 plan 7/19·교육청 7/18 실측, 실무자 요청
@@ -713,7 +722,7 @@ export function levelIndent(
   bullet2: Bullet2 = "○",
   asteriskThird = false,
   markerHeight: number = bodyHeight,
-  stepIndent = false,
+  stepIndent = 0,
 ): LevelIndent {
   // 개조식은 실측 양식의 들여쓰기 체계(□ 0 / ○ 1자 / - 1.5자 …)를 따른다.
   if (numbering === "gaejosik") return gaejosikLevelIndent(depth, bodyHeight, sizes, bullet2, stepIndent)

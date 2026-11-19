@@ -88,10 +88,43 @@ describe("한전 개조식", () => {
     assert.equal((sec.match(/pageBreak="1"/g) ?? []).length >= 2, true)
     const t = texts(sec)
     assert.ok(t.includes("붙임 1") && t.includes("붙임 2"))
-    assert.ok(t.some((s) => s.startsWith("붙 임 1. 현재 대응대책") && s.includes("1부.")))
+    // 첫 줄 "붙 임" 뒤는 탭(내어쓰기 자리) — "1." 과 다음 줄 "2." 가 같은 x
+    assert.ok(/<hp:t>붙 임<hp:tab [^>]*\/>1\. 현재 대응대책  1부\.<\/hp:t>/.test(sec))
     assert.ok(t.some((s) => s.startsWith("2. 요약") && s.endsWith("1부. 끝.")))
     // 목록은 첫 붙임 제목 띠보다 앞
-    assert.ok(sec.indexOf("붙 임 1.") < sec.indexOf("붙임 1</hp:t>"))
+    assert.ok(sec.indexOf("<hp:t>붙 임<hp:tab") < sec.indexOf("붙임 1</hp:t>"))
+  })
+
+  it("들여쓰기 — 1. 0칸 / □ 1칸 / ○ 2칸 / -·* 3칸(1칸 = 16pt), 간격 규칙 기본 켬, 참고 부호는 *", async () => {
+    const { sec, hdr } = await parts(kepco)
+    const left = (id: number) => Number(hdr.match(new RegExp(`<hh:paraPr id="${id}"[\\s\\S]*?<hc:left value="(-?\\d+)"`))![1])
+    const line = (id: number) => Number(hdr.match(new RegExp(`<hh:paraPr id="${id}"[\\s\\S]*?<hh:lineSpacing type="PERCENT" value="(\\d+)"`))![1])
+    assert.deepEqual([left(8), left(9), left(10), left(20)], [1600, 3200, 4800, 4800])
+    assert.equal(line(8), 200)
+    assert.ok(/<hp:t>\*<hp:tab/.test(sec), "※ 원고가 * 부호로")
+    const off = resolveGongmun({ preset: "gaejosik", kepco: true, stepIndent: false, stepSpacing: false })
+    assert.equal(off.stepIndent, false)
+    assert.equal(off.stepSpacing, false)
+  })
+
+  it("쪽 번호 — 본문 첫 쪽부터 1, 붙임 쪽은 없음", async () => {
+    const { sec } = await parts(kepco)
+    assert.ok(sec.includes('<hp:newNum num="1" numType="PAGE"/>'))
+    const att = sec.slice(sec.indexOf("붙임 1</hp:t>") - 4000, sec.indexOf("붙임 1</hp:t>"))
+    assert.ok(att.includes('<hp:pageNum pos="NONE"'), "첫 붙임에서 쪽 번호 없음")
+    assert.equal((sec.match(/hidePageNum="1"/g) ?? []).length >= 3, true, "표지 + 붙임 2쪽 감추기")
+  })
+
+  it("표 — 회색 0.12mm 선, 양옆 열린 표, 머리 행 #F2F2F2", async () => {
+    const z = await JSZip.loadAsync(await markdownToHwpx("## 현황\n\n| 구분 | 내용 |\n|---|---|\n| 기준 | 재정립 |\n", { gongmun: kepco as never }))
+    const hdr = await z.file("Contents/header.xml")!.async("text")
+    const sec = await z.file("Contents/section0.xml")!.async("text")
+    // 첫 열 칸: 왼쪽 선 없음 + 오른쪽 회색 0.12mm
+    const firstCellBf = sec.match(/<hp:tc [^>]*borderFillIDRef="(\d+)"[^>]*>(?:(?!<\/hp:tc>)[\s\S])*?<hp:cellAddr colAddr="0" rowAddr="1"/)![1]
+    const bf = hdr.slice(hdr.indexOf(`<hh:borderFill id="${firstCellBf}"`), hdr.indexOf("</hh:borderFill>", hdr.indexOf(`<hh:borderFill id="${firstCellBf}"`)))
+    assert.ok(/<hh:leftBorder type="NONE"/.test(bf), bf)
+    assert.ok(/<hh:rightBorder type="SOLID" width="0.12 mm" color="#808080"/.test(bf), bf)
+    assert.ok(hdr.includes('faceColor="#F2F2F2"'))
   })
 
   it("다단 결재 표지 — 결재표(기본 차장·부장·처장)·합의·문서번호 상자·제목 '( 안 )'·처·부·작성자", async () => {

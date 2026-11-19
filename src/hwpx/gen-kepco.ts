@@ -15,7 +15,7 @@ import { tbl, tc } from "./gen-gongmun-extra.js"
 import type { TableBfRegistry } from "./gen-table-bf.js"
 import {
   PARA_NORMAL, CHAR_NORMAL, GONGMUN_CENTER, GONGMUN_RIGHT,
-  GJ_CHAR_CHAPTER_TITLE, GJ_CHAR_TOC_ITEM, GJ_CHAR_COVER_SUB, GJ_CHAR_TABLE, GJ_PARA_CHAPTER,
+  pageHidingCtrl, GJ_CHAR_CHAPTER_TITLE, GJ_CHAR_TOC_ITEM, GJ_CHAR_COVER_SUB, GJ_CHAR_TABLE, GJ_PARA_CHAPTER,
   escapeTextXml,
 } from "./gen-ids.js"
 
@@ -33,12 +33,12 @@ export function parseAttachHeading(text: string): { no: string; title: string } 
 
 /**
  * 변형 paraPr(두 자리 부호 내어쓰기) 뒤에 붙는 개조식 전용 paraPr 의 id — gen-header 가 방출하고 gen-section 이 같은 식으로 조회한다.
- * 순서: 절 띠(stepIndent·stepSpacing) → 붙임 목록 첫 줄 → 붙임 목록 다음 줄(kepco)
+ * 순서: 절 띠(stepIndent·stepSpacing) → 붙임 목록 첫 줄·다음 줄 → 붙임 제목 띠 호스트(다음이 □ / 그 밖)(kepco)
  */
 export function gaejosikExtraParaIds(g: Pick<ResolvedGongmun, "stepIndent" | "stepSpacing" | "kepco">, variantCount: number, variantBase: number): { sectionBand?: number; attach?: KepcoAttachParaIds } {
   let next = variantBase + variantCount
   const sectionBand = g.stepIndent || g.stepSpacing ? next++ : undefined
-  const attach = g.kepco ? { first: next++, next: next++ } : undefined
+  const attach = g.kepco ? { first: next++, next: next++, hostDae: next++, hostOther: next++ } : undefined
   return { sectionBand, attach }
 }
 
@@ -54,8 +54,12 @@ export function buildKepcoHeading(no: number, title: string): string {
 const ATTACH_NUM_W = 7535
 const ATTACH_ROW_H = 3782
 
-/** `붙임 N | 제목` 회색 띠 — 새 쪽에서 시작한다 */
-export function buildKepcoAttachTitle(no: string, title: string, bodyWidth: number, bfReg: TableBfRegistry): string {
+/**
+ * `붙임 N | 제목` 회색 띠 — 새 쪽에서 시작한다. 붙임 쪽에는 쪽 번호를 달지 않는다:
+ * 첫 붙임에 쪽 번호 위치 "없음" 컨트롤(그 쪽부터 끝까지)을, 붙임마다 그 쪽 번호 감추기를 넣는다.
+ * @param hostPara 띠 호스트 paraPr — 아래 간격으로 띠와 첫 본문 사이를 300%에 맞춘다
+ */
+export function buildKepcoAttachTitle(no: string, title: string, bodyWidth: number, bfReg: TableBfRegistry, hostPara: number = PARA_NORMAL, first = false): string {
   const bf = bfReg.get({ t: ["0.7 mm", "#808080"], b: ["0.7 mm", "#808080"], l: "none", r: "none", fill: "#F2F2F2" })
   const cellPara = (text: string) =>
     `<hp:p paraPrIDRef="${GONGMUN_CENTER}" styleIDRef="0"><hp:run charPrIDRef="${GJ_CHAR_TOC_ITEM}"><hp:t>${escapeTextXml(text)}</hp:t></hp:run></hp:p>`
@@ -63,13 +67,14 @@ export function buildKepcoAttachTitle(no: string, title: string, bodyWidth: numb
   const row = tc({ bf, row: 0, col: 0, w: ATTACH_NUM_W, h: ATTACH_ROW_H, paras: cellPara(`붙임 ${no}`) })
     + tc({ bf, row: 0, col: 1, w: titleW, h: ATTACH_ROW_H, paras: cellPara(title), name: "__kordoc_attach" })
   const table = tbl([row], bodyWidth, ATTACH_ROW_H, 2).replace(`<hp:outMargin left="283" right="283" top="283" bottom="283"/>`, `<hp:outMargin left="0" right="0" top="283" bottom="0"/>`)
-  return `<hp:p paraPrIDRef="${PARA_NORMAL}" styleIDRef="0" pageBreak="1"><hp:run charPrIDRef="${CHAR_NORMAL}">${table}</hp:run></hp:p>`
+  const ctrls = (first ? `<hp:ctrl><hp:pageNum pos="NONE" formatType="DIGIT" sideChar="-"/></hp:ctrl>` : "") + pageHidingCtrl(false)
+  return `<hp:p paraPrIDRef="${hostPara}" styleIDRef="0" pageBreak="1"><hp:run charPrIDRef="${CHAR_NORMAL}">${ctrls}${table}</hp:run></hp:p>`
 }
 
 // ─── 붙임 목록 ──────────────────────────────────────
 
 /** 목록 문단 paraPr 둘(첫 줄·다음 줄) — gen-header 가 변형 paraPr 뒤에 붙이고 gen-section 이 같은 식으로 id 를 찾는다 */
-export interface KepcoAttachParaIds { first: number; next: number }
+export interface KepcoAttachParaIds { first: number; next: number; hostDae: number; hostOther: number }
 
 /**
  * `붙 임 1. 제목  1부.` 목록. 첫 줄만 "붙 임" 머리를 달고 나머지는 번호 자리를 맞춘다.
@@ -77,10 +82,11 @@ export interface KepcoAttachParaIds { first: number; next: number }
  */
 export function buildKepcoAttachList(items: { no: string; title: string }[], ids: KepcoAttachParaIds): string[] {
   return items.map((it, i) => {
-    const head = i === 0 ? "붙 임 " : ""
     const end = i === items.length - 1 ? " 끝." : ""
-    const text = `${head}${i + 1}. ${it.title}  1부.${end}`
-    return `<hp:p paraPrIDRef="${i === 0 ? ids.first : ids.next}" styleIDRef="0"><hp:run charPrIDRef="${CHAR_NORMAL}"><hp:t>${escapeTextXml(text)}</hp:t></hp:run></hp:p>`
+    const text = escapeTextXml(`${i + 1}. ${it.title}  1부.${end}`)
+    // 첫 줄은 "붙 임" 뒤 탭이 내어쓰기 자리(= 다음 줄 왼쪽)로 가서 "1." 과 "2." 가 같은 x 에 선다
+    const head = i === 0 ? `붙 임<hp:tab width="750" leader="0" type="1"/>` : ""
+    return `<hp:p paraPrIDRef="${i === 0 ? ids.first : ids.next}" styleIDRef="0"><hp:run charPrIDRef="${CHAR_NORMAL}"><hp:t>${head}${text}</hp:t></hp:run></hp:p>`
   })
 }
 

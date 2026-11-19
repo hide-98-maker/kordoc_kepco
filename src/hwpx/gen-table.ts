@@ -15,7 +15,7 @@ import { clampSpan } from "./parser-shared.js"
 import { CHAR_NORMAL, CHAR_BOLD, CHAR_TABLE_HEADER, PARA_NORMAL, escapeXml, escapeTextXml, type ResolvedTheme } from "./gen-ids.js"
 import { generateRuns, parseInlineMarkdown } from "./md-runs.js"
 import { measureTextWidth } from "./text-metrics.js"
-import { TableBfRegistry, dataCellSpec } from "./gen-table-bf.js"
+import { TableBfRegistry, dataCellSpec, kepcoCellSpec } from "./gen-table-bf.js"
 import { takeProfile, normalizeAnchor, normalizeRowAnchor, type ProfileRemap, type TableRemap } from "./gen-profile.js"
 import { DATA_TABLE_ID_BASE } from "./geometry.js"
 import { ImageRegistry, splitImageRefs } from "./gen-image.js"
@@ -53,6 +53,8 @@ export interface GongmunTableStyle {
   bfRegistry?: TableBfRegistry
   /** 데이터 표를 더 좁힐 폭(HWPUNIT) — 개조식 stepIndent 가 표 왼쪽 끝을 □ 위치(2칸)에 맞출 때(DATA_TABLE_INSET 에 더해 적용). 기본 0 */
   extraInset?: number
+  /** 한전 개조식 표 — 회색 0.12mm 선·양옆 열린 표(kepcoCellSpec), 행 최소 높이 kepcoMinRowH */
+  kepcoGrid?: boolean
   /** 데이터 표 호스트 문단 paraPr(RIGHT) — bfRegistry와 함께 지정 */
   rightParaPr?: number
   /** 헤더행 음영색 (기본 #E6E6E6 — 실측 GT1·샘플양식1) */
@@ -295,6 +297,9 @@ export function computeColWidths(colMax: number[], totalWidth: number, colMinWor
 }
 
 /** 행 높이 추정 — 각 셀의 줄바꿈 수 시뮬레이션(최다 줄 기준) */
+/** 한전 개조식 표 행 최소 높이 — 레퍼런스 머리 행 3180·한 줄 본문 행 4005~4347 사이 */
+const KEPCO_MIN_ROW_H = 3600
+
 function estimateRowHeight(cellWidths: number[][], widths: number[], charHeight: number): number {
   let maxLines = 1
   cellWidths.forEach((cell, c) => {
@@ -400,7 +405,7 @@ export function generateTable(rows: string[][], theme: ResolvedTheme, style: Gon
     ? (id: number) => (id === CHAR_NORMAL ? style.charPr : id === CHAR_BOLD ? style.boldCharPr : id)
     : undefined
 
-  const rowHeights = cellWidths.map((row) => style ? estimateRowHeight(row, colWidths, measureH) : 1500)
+  const rowHeights = cellWidths.map((row) => style ? Math.max(estimateRowHeight(row, colWidths, measureH), style.kepcoGrid ? KEPCO_MIN_ROW_H : 0) : 1500)
 
   const trElements = rows.map((row, rowIdx) => {
     // 부족한 셀은 빈 문자열로 채워 colCnt 맞춤
@@ -444,7 +449,9 @@ export function generateTable(rows: string[][], theme: ResolvedTheme, style: Gon
       // 테두리 — 프로필 실측 최우선, 다음 위계 레지스트리(TBL-01·02), 폴백 기본
       const bf = prof?.cellBf.get(k)
         ?? (reg
-          ? reg.get(dataCellSpec({
+          ? reg.get(style!.kepcoGrid
+            ? kepcoCellSpec({ col: colIdx, colEnd: colIdx, colCnt, fill: isHeaderRow ? (style!.headerFill ?? "#E6E6E6") : isLabelCell ? (style!.labelFill ?? "#E7E7E7") : undefined })
+            : dataCellSpec({
               row: rowIdx, rowEnd: rowIdx, col: colIdx, colEnd: colIdx,
               rowCnt, colCnt, headerRows: 1,
               fill: isHeaderRow ? (style!.headerFill ?? "#E6E6E6") : isLabelCell ? (style!.labelFill ?? "#E7E7E7") : undefined,
@@ -583,7 +590,7 @@ export function generateHtmlTableXml(rawHtml: string, theme: ResolvedTheme, tota
   const colWidths = profileColWidths(prof, colCnt) ?? computeColWidths(colMax, totalWidth, colMinWord, roles, colSlack(curFace))
   const colCentered = colWidths.map((w, c) => roles[c] !== "content" && colMaxBody[c] + CELL_PAD <= w)
 
-  const cellH = style ? Math.round(measureH * 1.6) + 282 : 1500
+  const cellH = style ? Math.max(Math.round(measureH * 1.6) + 282, style.kepcoGrid ? KEPCO_MIN_ROW_H : 0) : 1500
   const tblW = colWidths.reduce((a, b) => a + b, 0)
   const tblId = nextTableId()
   const useHeaderStyle = !style && (theme.tableHeader !== theme.body || theme.tableHeaderBold)
@@ -687,7 +694,9 @@ export function generateHtmlTableXml(rawHtml: string, theme: ResolvedTheme, tota
     // 테두리 — 프로필 최우선, 다음 위계(병합 셀은 끝 행·열 기준 — 클램프된 rowSpan), 폴백 기본
     const bf = prof?.cellBf.get(k)
       ?? (reg
-        ? reg.get(dataCellSpec({
+        ? reg.get(style!.kepcoGrid
+          ? kepcoCellSpec({ col: cell.c, colEnd: cell.c + cell.colSpan - 1, colCnt, fill: isHeader ? (style!.headerFill ?? "#E6E6E6") : undefined })
+          : dataCellSpec({
             row: cell.r, rowEnd, col: cell.c, colEnd: cell.c + cell.colSpan - 1,
             rowCnt, colCnt, headerRows: htmlHeaderRows,
             fill: isHeader ? (style!.headerFill ?? "#E6E6E6") : undefined,

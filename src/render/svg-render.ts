@@ -885,6 +885,8 @@ function drawPageDecor(root: Element, paraPages: Map<Element, number[]>, ctx: Ct
 
 function drawPageNumbers(root: Element, paraPages: Map<Element, number[]>, ctx: Ctx): void {
   let decl: { el: Element; page: number; prId: string | null } | undefined
+  // 뒤에 다시 놓인 쪽 번호 컨트롤은 그 쪽부터 위치를 바꾼다(pos="NONE" 이면 그 쪽부터 번호 없음 — 붙임 쪽 등)
+  const later: Array<{ page: number; pos: string }> = []
   const hidden = new Set<number>()
   // 새 번호로 시작(hp:newNum numType="PAGE") — 그 컨트롤이 든 쪽부터 번호를 num 으로 다시 센다(표지·목차 뒤 본문 "- 1 -")
   const restarts: Array<{ page: number; num: number }> = []
@@ -893,13 +895,14 @@ function drawPageNumbers(root: Element, paraPages: Map<Element, number[]>, ctx: 
     for (const run of elements(p)) if (ln(run) === "run") for (const ctrl of elements(run)) if (ln(ctrl) === "ctrl") {
       const pn = findChildByLocalName(ctrl, "pageNum"), ph = findChildByLocalName(ctrl, "pageHiding"), nn = findChildByLocalName(ctrl, "newNum")
       if (pn && !decl) decl = { el: pn, page, prId: run.getAttribute("charPrIDRef") }
+      else if (pn) later.push({ page, pos: pn.getAttribute("pos") ?? "BOTTOM_CENTER" })
       if (ph && num(ph, "hidePageNum")) hidden.add(page)
       if (nn && (nn.getAttribute("numType") ?? "PAGE") === "PAGE") restarts.push({ page, num: num(nn, "num", 1) })
     }
   }
   if (!decl) return
-  const pos = decl.el.getAttribute("pos") ?? "BOTTOM_CENTER"
-  if (pos === "NONE") return
+  const firstPos = decl.el.getAttribute("pos") ?? "BOTTOM_CENTER"
+  const posAt = (page: number): string => later.filter(l => l.page <= page).pop()?.pos ?? firstPos
   const side = decl.el.getAttribute("sideChar") ?? ""
   // 글꼴·크기는 "쪽 번호" 스타일의 글자 모양(한컴 PDF: 그 스타일이 굴림이면 굴림, 함초롬돋움이면 함초롬돋움 — 컨트롤이 든 글자 모양과 무관).
   // 크기도 그 스타일 것이다(같은 판 짝: 12pt 스타일 두 문서 모두 PDF 12pt, 10pt 스타일 291문서 10pt). 스타일이 없으면 10pt
@@ -910,6 +913,8 @@ function drawPageNumbers(root: Element, paraPages: Map<Element, number[]>, ctx: 
   const h = ctx.styles.pageNumCharPr != null ? st.height : 1000
   for (let page = decl.page; page < ctx.pages.length; page++) {
     if (hidden.has(page)) continue
+    const pos = posAt(page)
+    if (pos === "NONE") continue
     const restart = restarts.filter(r => r.page <= page).pop()
     const n = restart ? restart.num + page - restart.page : ctx.pageBase + page + 1
     const text = side ? `${side} ${formatHeadNumber(n, decl.el.getAttribute("formatType") ?? "DIGIT")} ${side}` : formatHeadNumber(n, decl.el.getAttribute("formatType") ?? "DIGIT")
