@@ -15,7 +15,7 @@ import {
   NS_SECTION, NS_PARA,
   CHAR_NORMAL, CHAR_BOLD, CHAR_QUOTE, CHAR_H1, PARA_NORMAL, PARA_QUOTE, PARA_CODE, PARA_LIST,
   GONGMUN_CENTER, GONGMUN_RIGHT, GONGMUN_SRC_LEFT, GONGMUN_TBL_CENTER, GONGMUN_TBL_LEFT, GONGMUN_LIST_BASE, GONGMUN_LIST_PLAIN_BASE, GONGMUN_LIST_VARIANT_BASE,
-  GJ_CHAR_DAE, GJ_CHAR_DAE_BOLD, GJ_CHAR_CHAM, GJ_CHAR_CHAM_BOLD, GJ_PARA_CHAM,
+  GJ_CHAR_DAE, GJ_CHAR_DAE_BOLD, GJ_CHAR_CHAM, GJ_CHAR_CHAM_BOLD, GJ_PARA_CHAM, GJ_PARA_CHAPTER,
   GJ_CHAR_TABLE, GJ_CHAR_TABLE_BOLD, GJ_CHAR_BODY_TITLE, gongmunTableHeaderBf,
   GJ_CHAR_APPROVAL, GJ_CHAR_TITLE_BAR, GONGMUN_APPROVAL_CHAR,
   GONGMUN_TBL_CHAR, GONGMUN_TBL_CHAR_BOLD, GONGMUN_TBL_PT, GONGMUN_TITLE_BAR_CHAR, GONGMUN_BODY_RATIO,
@@ -762,7 +762,9 @@ export function blocksToSectionXml(
       const last = ctx.paraXmls.length - 1
       // 한 문단짜리 항목만(여러 문단을 이어 붙인 항목은 끝 문단을 정확히 못 집으므로 건너뛴다)
       const m = /^<hp:p ((?:pageBreak="1" )?)paraPrIDRef="(\d+)"/.exec(ctx.paraXmls[last])
-      const twin = ids && pct && m && !ctx.paraXmls[last].includes("\n  <hp:p ") ? ids.twins[pct][Number(m[2])] : undefined
+      // 큰 숫자 제목 바로 아래 첫 □ 는 제목 줄간격 200% 그대로 — □ 앞 250% 는 두 번째 이후 □ 에만(사용자 지정)
+      const headThenDae = pct === 250 && m && Number(m[2]) === GJ_PARA_CHAPTER
+      const twin = ids && pct && m && !headThenDae && !ctx.paraXmls[last].includes("\n  <hp:p ") ? ids.twins[pct][Number(m[2])] : undefined
       if (twin !== undefined) ctx.paraXmls[last] = ctx.paraXmls[last].replace(m![0], `<hp:p ${m![1]}paraPrIDRef="${twin}"`)
     }
 

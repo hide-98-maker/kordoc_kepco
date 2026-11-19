@@ -121,10 +121,22 @@ describe("한전 개조식", () => {
     const body = sec.slice(sec.lastIndexOf("<hp:p ", sec.indexOf("1. 추진배경")))
     const seq = [...body.matchAll(/<hp:p (?:pageBreak="1" )?paraPrIDRef="(\d+)"[^>]*><hp:run[^>]*>(?:<hp:ctrl>[\s\S]*?<\/hp:ctrl>)*<hp:t>([^<]{0,6})/g)].map((m) => [Number(m[1]), m[2]] as const)
     const lsOf = (text: string) => pp(seq.find(([, t]) => t.startsWith(text))![0])
-    assert.equal(lsOf("1. 추진").ls, 250, "□ 앞 장 제목 → 250%")
+    assert.equal(lsOf("1. 추진").ls, 200, "장 제목 바로 아래 첫 □ 는 200% 그대로")
     assert.equal(lsOf("-").ls, 180, "* 앞 - → 180%")
     assert.equal(lsOf("*").ls, 300, "장 제목 앞 * → 300%")
     for (const [id] of seq.slice(0, 6)) assert.equal(pp(id).prev, 500, "문단 위는 짝도 5pt")
+  })
+
+  it("두 번째 이후 □ 는 위 문장 줄간격 250%, 장 제목 바로 아래 첫 □ 는 200%", async () => {
+    const z = await JSZip.loadAsync(await markdownToHwpx("## 추진배경\n\n### 첫째 항목\n\n- 내용 하나\n\n### 둘째 항목\n\n- 내용 둘\n", { gongmun: kepco as never }))
+    const sec = await z.file("Contents/section0.xml")!.async("text")
+    const hdr = await z.file("Contents/header.xml")!.async("text")
+    const ls = (id: string) => Number(hdr.slice(hdr.indexOf(`<hh:paraPr id="${id}"`)).match(/lineSpacing type="PERCENT" value="(\d+)"/)![1])
+    const pOf = (text: string) => sec.slice(sec.lastIndexOf("<hp:p ", sec.indexOf(text))).match(/paraPrIDRef="(\d+)"/)![1]
+    assert.equal(ls(pOf("1. 추진배경")), 200, "장 제목 → 첫 □ 200%")
+    // "내용 하나" 는 ○ 문단(부호 run 뒤 본문 run) — 그 문단의 paraPr
+    const p = sec.slice(sec.lastIndexOf("<hp:p ", sec.indexOf("내용 하나")))
+    assert.equal(ls(p.match(/paraPrIDRef="(\d+)"/)![1]), 250, "둘째 □ 위 문장 → 250%")
   })
 
   it("표 — 글자처럼 취급 + 오른쪽 정렬, 한 쪽을 넘는 표는 경고", async () => {
