@@ -107,6 +107,34 @@ describe("한전 개조식", () => {
     assert.equal(off.stepSpacing, false)
   })
 
+  it("간격 — 문단 위 5pt 기본, 장 제목 200%·아래 0, * 220%, * 바로 앞 문단 180%", async () => {
+    const { sec, hdr } = await parts(kepco)
+    const pp = (id: number) => {
+      const b = hdr.slice(hdr.indexOf(`<hh:paraPr id="${id}"`), hdr.indexOf("</hh:paraPr>", hdr.indexOf(`<hh:paraPr id="${id}"`)))
+      return { prev: Number(b.match(/<hc:prev value="(-?\d+)"/)![1]), next: Number(b.match(/<hc:next value="(-?\d+)"/)![1]), ls: Number(b.match(/lineSpacing type="PERCENT" value="(\d+)"/)![1]) }
+    }
+    assert.deepEqual(pp(23), { prev: 2000, next: 0, ls: 200 }, "장 제목: 5pt + 300% 몫, 아래 0, 200%")
+    assert.deepEqual(pp(8), { prev: 1250, next: 0, ls: 200 }, "□: 5pt + 250% 몫")
+    assert.deepEqual(pp(9), { prev: 500, next: 0, ls: 200 }, "○: 5pt")
+    assert.deepEqual(pp(20), { prev: 500, next: 0, ls: 220 }, "*: 5pt, 220%")
+    // * 바로 앞 '-' 문단은 180% 짝 paraPr
+    const before = sec.slice(0, sec.indexOf("<hp:t>*<hp:tab"))
+    const opens = [...before.matchAll(/<hp:p (?:pageBreak="1" )?paraPrIDRef="(\d+)"/g)]
+    const prevId = Number(opens[opens.length - 2][1]) // 마지막은 * 문단 자신
+    assert.equal(pp(prevId).ls, 180)
+    assert.equal(pp(prevId).prev, 500)
+  })
+
+  it("□ 첫 괄호 — 한컴 윤고딕 740 굵게 #203A7B, □ 크기, 괄호 없는 □ 는 그대로", async () => {
+    const { sec, hdr } = await parts(kepco)
+    const m = /<hp:run charPrIDRef="(\d+)"><hp:t>\(특성\)<\/hp:t><\/hp:run>/.exec(sec)
+    assert.ok(m, "괄호만 따로 run")
+    const b = hdr.slice(hdr.indexOf(`<hh:charPr id="${m![1]}"`), hdr.indexOf("</hh:charPr>", hdr.indexOf(`<hh:charPr id="${m![1]}"`)))
+    assert.ok(b.includes('height="1600"') && b.includes('textColor="#203A7B"') && b.includes('bold="1"'), b)
+    assert.ok(hdr.includes('face="한컴 윤고딕 740"'))
+    assert.ok(!/<hp:t>분산e 연계선로 단선 대응 필요<\/hp:t><\/hp:run><hp:run[^>]*><hp:t> <\/hp:t>/.test(sec))
+  })
+
   it("쪽 번호 — 본문 첫 쪽부터 1, 붙임 쪽은 없음", async () => {
     const { sec } = await parts(kepco)
     assert.ok(sec.includes('<hp:newNum num="1" numType="PAGE"/>'))

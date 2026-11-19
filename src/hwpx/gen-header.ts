@@ -5,7 +5,7 @@
 import { type ResolvedGongmun, levelIndent, levelMarkerHeight, markerWidth, needsGaejosikAssets, usesAsteriskThird, usesReportFonts } from "./gongmun.js"
 import { KordocError, VERSION } from "../utils.js"
 import { GJ_CHAR_APPROVAL, GJ_CHAR_TITLE_BAR, GONGMUN_APPROVAL_CHAR, GONGMUN_TBL_PT, GONGMUN_TITLE_BAR_CHAR, charVariantBase } from "./gen-ids.js"
-import { gaejosikExtraParaIds } from "./gen-kepco.js"
+import { gaejosikExtraParaIds, KEPCO_PARA_BEFORE, KEPCO_REF_LINE_SPACING, KEPCO_BEFORE_REF_LINE_SPACING } from "./gen-kepco.js"
 import { GAEJOSIK_STEP_LINE_SPACING, GAEJOSIK_STEP_UNIT, gaejosikStepSpaceBefore, gaejosikStepChamGap, gaejosikSizes, gaejosikSpaceBefore, gaejosikChamIndent, gaejosikTocItemIndent, GAEJOSIK_COLORS } from "./gaejosik.js"
 import {
   NS_HEAD, NS_OPF, NS_HPF, NS_OCF, NS_PARA, NS_CORE,
@@ -208,6 +208,9 @@ function buildParaProperties(gongmun: ResolvedGongmun | null, listIndentVariants
   // stepSpacing(개조식) — □·○·- 본문 단계 줄간격 200%, 띠·□ 앞 간격은 문단 위 간격 값으로 (생성 후 빈 문단 삽입 불필요)
   const ls = gongmun.lineSpacing
   const lsList = gongmun.stepSpacing ? GAEJOSIK_STEP_LINE_SPACING : ls
+  // 한전 개조식 — 모든 본문 문단 위 5pt(레퍼런스 문단 위 500), 장 제목 앞·□ 앞 몫은 그 위에 더한다(사용자 지정 2026-11-19)
+  const pb = gongmun.kepco ? KEPCO_PARA_BEFORE : 0
+  const listOpts: Array<Parameters<typeof paraPr>[1]> = []
   const titleAlign = gongmun.centerTitle ? "CENTER" : "LEFT"
   // 공문서 모드 전 문단 어절 단위 줄바꿈(keepWord) — 한글이 단어 중간에서 끊기지 않음.
   // 헤딩에 outlineLevel(OUTLINE)을 주지 않는다 — 한글이 개요 번호("1.", "1.1.")를
@@ -247,15 +250,16 @@ function buildParaProperties(gongmun: ResolvedGongmun | null, listIndentVariants
     // 「2_보고서 양식」 한 파일의 저장값이었고 v4.9.1 에서 코퍼스 실측(88% 0)으로 교체됐다.
     // 2026-09-06 재검증(서울·gate-fill 428건, hp:case 우선 — default 는 2배 함정): □ 0 96%·200 2%,
     // ○ 0 96%·300 3%, ㅇ 0 84%, - 0 90%. 3000/2000 계열은 어느 스코프로 읽어도 나오지 않는다
-    const sectionGap = gongmun.stepSpacing
+    const sectionGap = pb + (gongmun.stepSpacing
       ? gaejosikStepSpaceBefore(d === 0 ? "dae" : "other", gongmun.bodyHeight)
       : gongmun.numbering === "gaejosik" || gongmun.numbering === "report"
       ? gaejosikSpaceBefore(d, gongmun.bodyHeight)
-      : 0
+      : 0)
     // □ 대항목은 다음 문단과 같은 쪽에 — 쪽 하단 고아 표제 방지 (장헤더와 동일 관행)
     const keepNext = (gongmun.numbering === "gaejosik" || gongmun.numbering === "report") && d === 0
     // 부호 뒤 탭이 내어쓰기 위치에 선다(autoTab) — 첫 줄 내용 = 둘째 줄 시작
-    base.push(paraPr(GONGMUN_LIST_BASE + d, { align: listAlign, lineSpacing: lsList, left, indent, spaceBefore: sectionGap, keepWord: true, keepWithNext: keepNext, autoTab: true }))
+    listOpts[d] = { align: listAlign, lineSpacing: lsList, left, indent, spaceBefore: sectionGap, keepWord: true, keepWithNext: keepNext, autoTab: true }
+    base.push(paraPr(GONGMUN_LIST_BASE + d, listOpts[d]))
   }
   // 가운데정렬 본문 단락(발신명의 등)
   base.push(paraPr(GONGMUN_CENTER, { align: "CENTER", lineSpacing: ls, keepWord: true }))
@@ -271,13 +275,19 @@ function buildParaProperties(gongmun: ResolvedGongmun | null, listIndentVariants
     const toc = gaejosikTocItemIndent(gongmun.bodyHeight, gongmun.sizes)
     const chamGap = gaejosikStepChamGap(gongmun.bodyHeight, gongmun.sizes)
     base.push(
-      paraPr(GJ_PARA_CHAM, gongmun.stepSpacing
+      // 한전 개조식 * — 줄간격 220%(* 와 아래 문단 사이), 위 5pt. * 바로 앞 문단은 180% 짝 paraPr 로 바꾼다(gen-section)
+      paraPr(GJ_PARA_CHAM, gongmun.kepco
+        ? { align: "LEFT", lineSpacing: KEPCO_REF_LINE_SPACING, left: cham.left, indent: cham.indent, spaceBefore: pb, keepWord: true, autoTab: true }
+        : gongmun.stepSpacing
         ? { align: "LEFT", lineSpacing: lsList, left: cham.left, indent: cham.indent, spaceBefore: chamGap.before, spaceAfter: chamGap.after, keepWord: true, autoTab: true }
         : { align: "LEFT", lineSpacing: ls, left: cham.left, indent: cham.indent, spaceBefore: gaejosikSpaceBefore(3, gongmun.bodyHeight), keepWord: true, autoTab: true }),
       paraPr(GJ_PARA_COVER, { align: "CENTER", lineSpacing: 130, keepWord: true }),
       paraPr(GJ_PARA_TOC_ITEM, { align: "LEFT", lineSpacing: 160, left: toc.left, indent: toc.indent, spaceBefore: 1800, keepWord: true }),
       // 장 헤더는 다음 문단과 같은 쪽에 — 쪽 하단 고아 헤더 방지 (실렌더 확인 이슈)
-      paraPr(GJ_PARA_CHAPTER, { align: "LEFT", lineSpacing: ls, spaceBefore: gongmun.stepSpacing ? gaejosikStepSpaceBefore("band", gongmun.bodyHeight) : 2400, spaceAfter: 600, keepWord: true, keepWithNext: true }),
+      // 한전 개조식은 장 제목 "1. 제목" 문단 — 아래 문단과도 줄간격 200%(아래 간격 0), 앞은 5pt + 장 제목 몫
+      paraPr(GJ_PARA_CHAPTER, gongmun.kepco
+        ? { align: "LEFT", lineSpacing: lsList, spaceBefore: pb + (gongmun.stepSpacing ? gaejosikStepSpaceBefore("band", gongmun.bodyHeight) : 2400), keepWord: true, keepWithNext: true }
+        : { align: "LEFT", lineSpacing: ls, spaceBefore: gongmun.stepSpacing ? gaejosikStepSpaceBefore("band", gongmun.bodyHeight) : 2400, spaceAfter: 600, keepWord: true, keepWithNext: true }),
       // 표지 장식 바 셀 빈 문단 — 저줄간격(실측 71%)으로 바 높이 818 안에 수납
       paraPr(GJ_PARA_BAR, { align: "CENTER", lineSpacing: 70, keepWord: true }),
     )
@@ -286,11 +296,11 @@ function buildParaProperties(gongmun: ResolvedGongmun | null, listIndentVariants
   // 유령 내어쓰기로 둘째 줄이 첫 줄보다 더 들어가던 결함 수정, 실렌더 QA)
   for (let d = 0; d < GONGMUN_LIST_LEVELS; d++) {
     const { left } = levelIndent(d, gongmun.bodyHeight, gongmun.numbering, gongmun.sizes, gongmun.bullet2, usesAsteriskThird(gongmun.preset), gongmun.bodyHeight, gongmun.stepBase)
-    const sectionGap = gongmun.stepSpacing
+    const sectionGap = pb + (gongmun.stepSpacing
       ? gaejosikStepSpaceBefore(d === 0 ? "dae" : "other", gongmun.bodyHeight)
       : gongmun.numbering === "gaejosik" || gongmun.numbering === "report"
       ? gaejosikSpaceBefore(d, gongmun.bodyHeight)
-      : 0
+      : 0)
     base.push(paraPr(GONGMUN_LIST_PLAIN_BASE + d, { align: listAlign, lineSpacing: lsList, left, indent: 0, spaceBefore: sectionGap, keepWord: true }))
   }
   // 결재란 라벨 셀 — 실측 결재선 lineSp 100% (GJ_PARA_BAR 70%는 스페이서 전용)
@@ -302,11 +312,11 @@ function buildParaProperties(gongmun: ResolvedGongmun | null, listIndentVariants
   for (let vi = 0; vi < listIndentVariants.length; vi++) {
     const { depth, widthHu } = listIndentVariants[vi]
     const { left } = levelIndent(depth, gongmun.bodyHeight, gongmun.numbering, gongmun.sizes, gongmun.bullet2, usesAsteriskThird(gongmun.preset), gongmun.bodyHeight, gongmun.stepBase)
-    const sectionGap = gongmun.stepSpacing
+    const sectionGap = pb + (gongmun.stepSpacing
       ? gaejosikStepSpaceBefore(depth === 0 ? "dae" : "other", gongmun.bodyHeight)
       : gongmun.numbering === "gaejosik" || gongmun.numbering === "report"
       ? gaejosikSpaceBefore(depth, gongmun.bodyHeight)
-      : 0
+      : 0)
     const keepNext = (gongmun.numbering === "gaejosik" || gongmun.numbering === "report") && depth === 0
     base.push(paraPr(GONGMUN_LIST_VARIANT_BASE + vi, { align: listAlign, lineSpacing: lsList, left, indent: -widthHu, spaceBefore: sectionGap, keepWord: true, keepWithNext: keepNext, autoTab: true }))
   }
@@ -321,14 +331,16 @@ function buildParaProperties(gongmun: ResolvedGongmun | null, listIndentVariants
   // 붙임 목록(kepco) — 첫 줄은 "붙 임 " 머리 폭만큼 내어쓰고 나머지 줄은 번호 자리에 맞춘다
   if (extra.attach) {
     const hang = markerWidth("붙 임", gongmun.bodyHeight)
-    const attachGap = gaejosikStepSpaceBefore("band", gongmun.bodyHeight)
-    const daeGap = gongmun.stepSpacing ? gaejosikStepSpaceBefore("dae", gongmun.bodyHeight) : gaejosikSpaceBefore(0, gongmun.bodyHeight)
+    const attachGap = pb + gaejosikStepSpaceBefore("band", gongmun.bodyHeight)
+    const daeGap = pb + (gongmun.stepSpacing ? gaejosikStepSpaceBefore("dae", gongmun.bodyHeight) : gaejosikSpaceBefore(0, gongmun.bodyHeight))
     base.push(
       paraPr(extra.attach.first, { align: "LEFT", lineSpacing: lsList, left: 0, indent: -hang, spaceBefore: 600, keepWord: true, autoTab: true }),
       paraPr(extra.attach.next, { align: "LEFT", lineSpacing: lsList, left: hang, indent: 0, keepWord: true }),
       // 붙임 제목 띠 호스트 — 띠와 첫 본문 사이 300%(띠 앞 간격과 같은 몫): 다음 문단이 □ 면 □ 앞 간격만큼 덜어 낸다
       paraPr(extra.attach.hostDae, { align: "LEFT", lineSpacing: ls, spaceAfter: Math.max(0, attachGap - daeGap), keepWord: true, keepWithNext: true }),
-      paraPr(extra.attach.hostOther, { align: "LEFT", lineSpacing: ls, spaceAfter: attachGap, keepWord: true, keepWithNext: true }),
+      paraPr(extra.attach.hostOther, { align: "LEFT", lineSpacing: ls, spaceAfter: Math.max(0, attachGap - pb), keepWord: true, keepWithNext: true }),
+      // * 바로 앞 문단용 180% 짝(□ ○ - ㆍ) — 위 문단과 * 사이 180%
+      ...extra.attach.before180.map((id, d) => paraPr(id, { ...listOpts[d], lineSpacing: KEPCO_BEFORE_REF_LINE_SPACING })),
     )
   }
   assertSequentialIds(base, "paraPr", 0)

@@ -38,7 +38,7 @@ export function parseAttachHeading(text: string): { no: string; title: string } 
 export function gaejosikExtraParaIds(g: Pick<ResolvedGongmun, "stepIndent" | "stepSpacing" | "kepco">, variantCount: number, variantBase: number): { sectionBand?: number; attach?: KepcoAttachParaIds } {
   let next = variantBase + variantCount
   const sectionBand = g.stepIndent || g.stepSpacing ? next++ : undefined
-  const attach = g.kepco ? { first: next++, next: next++, hostDae: next++, hostOther: next++ } : undefined
+  const attach = g.kepco ? { first: next++, next: next++, hostDae: next++, hostOther: next++, before180: [next++, next++, next++, next++] } : undefined
   return { sectionBand, attach }
 }
 
@@ -74,7 +74,22 @@ export function buildKepcoAttachTitle(no: string, title: string, bodyWidth: numb
 // ─── 붙임 목록 ──────────────────────────────────────
 
 /** 목록 문단 paraPr 둘(첫 줄·다음 줄) — gen-header 가 변형 paraPr 뒤에 붙이고 gen-section 이 같은 식으로 id 를 찾는다 */
-export interface KepcoAttachParaIds { first: number; next: number; hostDae: number; hostOther: number }
+export interface KepcoAttachParaIds { first: number; next: number; hostDae: number; hostOther: number; before180: number[] }
+
+/** 한전 개조식 문단 위 간격 — 모든 본문 문단 5pt(레퍼런스 □·○ 문단 위 500) */
+export const KEPCO_PARA_BEFORE = 500
+/** * 참고 문단 줄간격 — * 와 아래 문단 사이 220%(사용자 지정) */
+export const KEPCO_REF_LINE_SPACING = 220
+/** * 바로 앞 문단 줄간격 — 위 문단과 * 사이 180%(사용자 지정) */
+export const KEPCO_BEFORE_REF_LINE_SPACING = 180
+/** □ 문장 첫 괄호 "(분산e 특성)" 글꼴·색 — 레퍼런스 한컴 윤고딕 740 굵게 #203A7B(크기는 □ 본문과 같게, 사용자 지정) */
+export const KEPCO_PAREN_FONT = "한컴 윤고딕 740"
+export const KEPCO_PAREN_COLOR = "#203A7B"
+/** □ 문장 첫 괄호 — [괄호, 나머지] */
+export function splitLeadParen(text: string): [string, string] | null {
+  const m = /^(\([^()]{1,30}\))\s*([\s\S]*)$/.exec(text.trim())
+  return m ? [m[1], m[2]] : null
+}
 
 /**
  * `붙 임 1. 제목  1부.` 목록. 첫 줄만 "붙 임" 머리를 달고 나머지는 번호 자리를 맞춘다.

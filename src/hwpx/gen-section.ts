@@ -8,7 +8,7 @@
  */
 
 import { type ResolvedGongmun, levelIndent, mmToHwpunit, needsGaejosikAssets, usesReportFonts } from "./gongmun.js"
-import { parseAttachHeading, buildKepcoHeading, buildKepcoAttachTitle, buildKepcoAttachList, buildKepcoApprovalCover, gaejosikExtraParaIds } from "./gen-kepco.js"
+import { splitLeadParen, parseAttachHeading, buildKepcoHeading, buildKepcoAttachTitle, buildKepcoAttachList, buildKepcoApprovalCover, gaejosikExtraParaIds } from "./gen-kepco.js"
 import { gaejosikStepLeft, GAEJOSIK_STEP_UNIT, stripChapterNumber, gaejosikSizes, gaejosikBodyWidth, GAEJOSIK_BASE_WIDTH } from "./gaejosik.js"
 import { type GaejosikSummaryPlan, buildGaejosikSummary, buildGaejosikCover, coverMetaBlocks, buildGaejosikToc, buildGaejosikChapter, buildGaejosikBodyTitle, gaejosikTitleH1, resetGjTableIds, buildGaejosikSection, GJ_SECTION_RE, GJ_CAPTION_RE, GJ_UNIT_RE, GJ_SOURCE_RE, type GaejosikExtraChars } from "./gen-gaejosik.js"
 import {
@@ -314,9 +314,15 @@ function kepcoAttachItems(blocks: MdBlock[], gongmun: ResolvedGongmun | null): {
  * 내어쓰기 위치에 서서 첫 줄 내용이 둘째 줄과 같은 x 에서 시작한다(v5 와 같은 방식 — 부호 폭 추정과 무관).
  * 탭 폭 속성은 한컴이 조판 때 다시 잰다(값은 반각 근사).
  */
-function markedParagraph(marker: string, content: string, paraPrId: number, charPrId: number, halfEm: number, mapCharId?: (id: number) => number, styleId = 0): string {
+function markedParagraph(marker: string, content: string, paraPrId: number, charPrId: number, halfEm: number, mapCharId?: (id: number) => number, styleId = 0, leadCharPr?: number): string {
   const cid = mapCharId ? mapCharId(charPrId) : charPrId
   const run = `<hp:run charPrIDRef="${cid}"><hp:t>${escapeTextXml(marker)}<hp:tab width="${Math.round(halfEm)}" leader="0" type="1"/></hp:t></hp:run>`
+  // 한전 개조식 □ 첫 괄호 — "(분산e 특성)" 만 전용 글자 모양(레퍼런스 한컴 윤고딕 740 굵게 남색), 나머지는 본문
+  const paren = leadCharPr !== undefined ? splitLeadParen(content) : null
+  if (paren) {
+    const lead = `<hp:run charPrIDRef="${leadCharPr}"><hp:t>${escapeTextXml(paren[0])}</hp:t></hp:run><hp:run charPrIDRef="${cid}"><hp:t> </hp:t></hp:run>`
+    return `<hp:p paraPrIDRef="${paraPrId}" styleIDRef="${styleId}">${run}${lead}${generateRuns(paren[1], charPrId, mapCharId)}</hp:p>`
+  }
   return `<hp:p paraPrIDRef="${paraPrId}" styleIDRef="${styleId}">${run}${generateRuns(content, charPrId, mapCharId)}</hp:p>`
 }
 
@@ -384,9 +390,9 @@ function renderHeading(block: MdBlock, blockIdx: number, ctx: SectionCtx): strin
       // levels 옵션이 □(0단계)를 지정했으면 그 글꼴·크기가 프리셋 실측값보다 우선
       const lv0 = ctx.levelIds?.[0]
       if (lv0) return markedParagraph("□", block.text || "", GONGMUN_LIST_BASE, lv0.normal, gongmun!.bodyHeight / 2,
-        (id) => (id === CHAR_BOLD ? lv0.bold : id === CHAR_NORMAL ? lv0.normal : id))
+        (id) => (id === CHAR_BOLD ? lv0.bold : id === CHAR_NORMAL ? lv0.normal : id), 0, ctx.gjChars?.kepcoParen)
       return markedParagraph("□", block.text || "", GONGMUN_LIST_BASE, GJ_CHAR_DAE, gongmun!.bodyHeight / 2,
-        (id) => (id === CHAR_BOLD ? GJ_CHAR_DAE_BOLD : id))
+        (id) => (id === CHAR_BOLD ? GJ_CHAR_DAE_BOLD : id), 0, ctx.gjChars?.kepcoParen)
     }
     // h4~h6 → ○/ㅇ 중항목 (bullet2) — levels 가 1단계를 지정했으면 그 값
     const lv1 = ctx.levelIds?.[1]
@@ -544,7 +550,7 @@ function renderListItem(block: MdBlock, blockIdx: number, ctx: SectionCtx): stri
       mapId = (id) => (id === CHAR_BOLD ? lv.bold : id === CHAR_NORMAL ? lv.normal : id)
     }
     return marker
-      ? markedParagraph(marker, content, listParaPr, listCharPr, gongmun.bodyHeight / 2, mapId)
+      ? markedParagraph(marker, content, listParaPr, listCharPr, gongmun.bodyHeight / 2, mapId, 0, depth === 0 ? ctx.gjChars?.kepcoParen : undefined)
       : generateParagraph(content, listParaPr, listCharPr, mapId)
   }
   const indent = block.indent || 0
@@ -745,6 +751,17 @@ export function blocksToSectionXml(
     // 첫 번째 단락에 secPr 주입 — 표는 전용 캐리어 문단(renderTable)이 담당
     if (ctx.opener.isFirst && block.type !== "table") {
       xml = ctx.opener.inject(xml)
+    }
+
+    // 한전 개조식 * 참고 — 바로 앞 □○-ㆍ 문단을 줄간격 180% 짝으로(위 문단과 * 사이 180%)
+    if (ctx.gongmun?.kepco && xml.startsWith(`<hp:p paraPrIDRef="${GJ_PARA_CHAM}"`) && ctx.paraXmls.length > 0) {
+      const ids = gaejosikExtraParaIds(ctx.gongmun, ctx.gongmunList?.indentVariants.length ?? 0, GONGMUN_LIST_VARIANT_BASE).attach
+      const last = ctx.paraXmls.length - 1
+      const m = /^<hp:p ((?:pageBreak="1" )?)paraPrIDRef="(\d+)"/.exec(ctx.paraXmls[last])
+      const d = m ? Number(m[2]) - GONGMUN_LIST_BASE : -1
+      if (ids && m && d >= 0 && d < ids.before180.length) {
+        ctx.paraXmls[last] = ctx.paraXmls[last].replace(m[0], `<hp:p ${m[1]}paraPrIDRef="${ids.before180[d]}"`)
+      }
     }
 
     // 개조식 전면부(표지·목차) 뒤 본문 첫 블록은 새 페이지에서

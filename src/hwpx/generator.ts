@@ -30,6 +30,7 @@ import { buildProfileRemap, type FormatProfile } from "./gen-profile.js"
 import { docframeActive, docframeCharPrXmls, docframeIds } from "./gen-docframe.js"
 import { levelCharIds, levelFontFaces, levelCharPrXmls } from "./gen-levels.js"
 import { ImageRegistry } from "./gen-image.js"
+import { KEPCO_PAREN_FONT, KEPCO_PAREN_COLOR } from "./gen-kepco.js"
 import { GJ_SUMMARY_FONT, planGaejosikSummary, gaejosikNeedsExtraChars } from "./gen-gaejosik.js"
 import { StyleRegistry } from "./style-registry.js"
 import { buildGongmunSectionV5, usesV5Engine } from "./gen-gongmun.js"
@@ -204,13 +205,17 @@ export async function markdownToHwpx(
   if (sumPlan) options?.warnings?.push(...sumPlan.warnings)
   // 개조식 절 띠 번호(HY헤드라인M □ 크기 흰 글자)·표 캡션(표 글꼴 +1pt)·단위 줄(표 글꼴 -2pt) — 원고에 있을 때만 요약 상자 다음 id
   const gjExtraBase = lvBase + lvXmls.length + sumXmls.length
-  const gjChars = gongmun?.preset === "gaejosik" && gaejosikNeedsExtraChars(blocks)
-    ? { sectionNum: gjExtraBase, caption: gjExtraBase + 1, unit: gjExtraBase + 2 } : null
+  const gjChars = gongmun?.preset === "gaejosik" && (gaejosikNeedsExtraChars(blocks) || gongmun.kepco)
+    ? { sectionNum: gjExtraBase, caption: gjExtraBase + 1, unit: gjExtraBase + 2, ...(gongmun.kepco ? { kepcoParen: gjExtraBase + 3 } : {}) } : null
+  // 한전 개조식 □ 첫 괄호 글꼴 — 레벨·요약 글꼴 뒤에 붙인다
+  const kepcoFonts = gongmun?.kepco ? [KEPCO_PAREN_FONT] : []
+  const kepcoFontId = staticFontNext(gongmun) + (remap?.fontFaces.length ?? 0) + lvFonts.length + sumFonts.length
   const gjSz = gongmun ? gaejosikSizes(gongmun.bodyHeight, gongmun.sizes) : null
   const gjExtraXmls = gjChars && gjSz ? [
     charPr(gjChars.sectionNum, gjSz.dae, false, false, 3, "#FFFFFF"),
     charPr(gjChars.caption, gjSz.table + 100, false, false, 7),
     charPr(gjChars.unit, gjSz.table - 200, false, false, 7),
+    ...(gjChars.kepcoParen !== undefined ? [charPr(gjChars.kepcoParen, gongmun!.levels?.[0]?.height ?? gjSz.dae, true, false, kepcoFontId, KEPCO_PAREN_COLOR, 100, kepcoFontId)] : []),
   ] : []
   const chartParts: ChartPart[] = []
   // 이미지 레지스트리 (v4.0.5 placeholder → v4.5.0 실데이터) — images 옵션 바이트·
@@ -243,7 +248,7 @@ export async function markdownToHwpx(
   for (const part of images.parts) zip.file(part.name, part.data)
   zip.file("Contents/header.xml", generateHeaderXml(theme, gongmun, fit?.variants ?? [], extraBorderFills,
     [...(remap?.charPrXmls ?? []), ...dfXmls, ...lvXmls, ...sumXmls, ...gjExtraXmls],
-    gongmunList?.indentVariants ?? [], [...(remap?.fontFaces ?? []), ...lvFonts, ...sumFonts]))
+    gongmunList?.indentVariants ?? [], [...(remap?.fontFaces ?? []), ...lvFonts, ...sumFonts, ...kepcoFonts]))
   zip.file("Contents/section0.xml", sectionXml)
   for (const part of chartParts) zip.file(part.name, part.xml)
   // Preview/ — 한글 프로그램의 일부 버전(특히 macOS)이 존재 여부를 확인함
