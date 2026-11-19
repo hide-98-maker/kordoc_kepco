@@ -127,6 +127,19 @@ export function gaejosikStepSpaceBefore(kind: "band" | "dae" | "other", bodyHeig
   return Math.round((extra / 100) * bodyHeight)
 }
 
+/** stepSpacing 의 모든 본문 문단 위 간격 — 5pt(500). 간격은 이 값 하나, 단계별 차이는 줄간격 %로 낸다 */
+export const GAEJOSIK_STEP_PARA_BEFORE = 500
+
+/** stepSpacing 의 단계별 줄간격(%) — □ 250 / ○·-·ㆍ 200 */
+export function gaejosikStepLineSpacing(depth: number): number {
+  return depth === 0 ? 250 : GAEJOSIK_STEP_LINE_SPACING
+}
+
+/** stepSpacing 의 장·절 띠 문단 위 간격 — 5pt + 띠 몫(300% 중 100%). 띠 호스트는 줄간격 %가 표 높이에 곱해져 간격 값으로 낸다 */
+export function gaejosikStepBandBefore(bodyHeight: number): number {
+  return GAEJOSIK_STEP_PARA_BEFORE + gaejosikStepSpaceBefore("band", bodyHeight)
+}
+
 /** stepSpacing 의 ※ 문단 위·아래 간격(HWPUNIT) — ※ 글자 높이의 180%·220% 고정 */
 export function gaejosikStepChamGap(bodyHeight: number, sizes: GaejosikSizeOverrides = {}): { before: number; after: number } {
   const cham = gaejosikSizes(bodyHeight, sizes).cham

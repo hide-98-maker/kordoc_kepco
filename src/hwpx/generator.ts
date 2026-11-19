@@ -226,6 +226,15 @@ export async function markdownToHwpx(
     : undefined
   const images = new ImageRegistry(supplied)
   const sectionXml = blocksToSectionXml(blocks, theme, gongmun, gongmunList, fit, chartParts, bfReg, remap, dfIds, images, page, lvIds, gjSummary, gjChars)
+  // 한전 개조식 표는 글자처럼 취급이라 쪽 경계에서 나뉘지 않는다 — 한 쪽 본문 높이를 넘을 표는 원고에서 나누도록 알린다
+  if (gongmun?.kepco && options?.warnings) {
+    const avail = Math.round((297 - gongmun.margins.top - gongmun.margins.bottom) * 283.465) - 2 * gongmun.headerFooter
+    let n = 0
+    for (const m of sectionXml.matchAll(/<hp:tbl [^>]*rowCnt="(\d+)"[^>]*><hp:sz width="\d+" widthRelTo="ABSOLUTE" height="(\d+)"/g)) {
+      n++
+      if (Number(m[2]) > avail) options.warnings.push(`한전 개조식: ${n}번째 표(${m[1]}행)가 한 쪽 본문 높이를 넘습니다 — 표는 글자처럼 취급이라 쪽에서 나뉘지 않으니 원고에서 표를 나누세요`)
+    }
+  }
 
   // 프로필이 있었는데 한 표에도 못 붙었으면 진단 경고 — 매칭은 보수적(불일치=미적용)이라
   // 마크다운을 크게 고쳐 쓴 경우 전멸할 수 있는데, 그걸 조용히 삼키지 않는다. 1회만.

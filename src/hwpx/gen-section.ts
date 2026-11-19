@@ -8,7 +8,7 @@
  */
 
 import { type ResolvedGongmun, levelIndent, mmToHwpunit, needsGaejosikAssets, usesReportFonts } from "./gongmun.js"
-import { splitLeadParen, parseAttachHeading, buildKepcoHeading, buildKepcoAttachTitle, buildKepcoAttachList, buildKepcoApprovalCover, gaejosikExtraParaIds } from "./gen-kepco.js"
+import { kepcoSpacingBefore, splitLeadParen, parseAttachHeading, buildKepcoHeading, buildKepcoAttachTitle, buildKepcoAttachList, buildKepcoApprovalCover, gaejosikExtraParaIds } from "./gen-kepco.js"
 import { gaejosikStepLeft, GAEJOSIK_STEP_UNIT, stripChapterNumber, gaejosikSizes, gaejosikBodyWidth, GAEJOSIK_BASE_WIDTH } from "./gaejosik.js"
 import { type GaejosikSummaryPlan, buildGaejosikSummary, buildGaejosikCover, coverMetaBlocks, buildGaejosikToc, buildGaejosikChapter, buildGaejosikBodyTitle, gaejosikTitleH1, resetGjTableIds, buildGaejosikSection, GJ_SECTION_RE, GJ_CAPTION_RE, GJ_UNIT_RE, GJ_SOURCE_RE, type GaejosikExtraChars } from "./gen-gaejosik.js"
 import {
@@ -753,15 +753,17 @@ export function blocksToSectionXml(
       xml = ctx.opener.inject(xml)
     }
 
-    // 한전 개조식 * 참고 — 바로 앞 □○-ㆍ 문단을 줄간격 180% 짝으로(위 문단과 * 사이 180%)
-    if (ctx.gongmun?.kepco && xml.startsWith(`<hp:p paraPrIDRef="${GJ_PARA_CHAM}"`) && ctx.paraXmls.length > 0) {
-      const ids = gaejosikExtraParaIds(ctx.gongmun, ctx.gongmunList?.indentVariants.length ?? 0, GONGMUN_LIST_VARIANT_BASE).attach
+    // 한전 개조식 — 다음 문단에 맞춰 바로 앞 문단 줄간격을 짝 paraPr 로: * 앞 180%·□ 앞 250%·장 제목 앞 300% (문단 위는 모두 5pt)
+    if (ctx.gongmun?.kepco && ctx.paraXmls.length > 0) {
+      const nm = /^<hp:p (pageBreak="1" )?paraPrIDRef="(\d+)"/.exec(xml)
+      // 새 쪽에서 시작하는 문단(붙임 띠)은 앞 쪽과 간격이 없으므로 건너뛴다
+      const pct = nm && !nm[1] ? kepcoSpacingBefore(Number(nm[2])) : undefined
+      const ids = pct ? gaejosikExtraParaIds(ctx.gongmun, ctx.gongmunList?.indentVariants.length ?? 0, GONGMUN_LIST_VARIANT_BASE).attach : undefined
       const last = ctx.paraXmls.length - 1
+      // 한 문단짜리 항목만(여러 문단을 이어 붙인 항목은 끝 문단을 정확히 못 집으므로 건너뛴다)
       const m = /^<hp:p ((?:pageBreak="1" )?)paraPrIDRef="(\d+)"/.exec(ctx.paraXmls[last])
-      const d = m ? Number(m[2]) - GONGMUN_LIST_BASE : -1
-      if (ids && m && d >= 0 && d < ids.before180.length) {
-        ctx.paraXmls[last] = ctx.paraXmls[last].replace(m[0], `<hp:p ${m[1]}paraPrIDRef="${ids.before180[d]}"`)
-      }
+      const twin = ids && pct && m && !ctx.paraXmls[last].includes("\n  <hp:p ") ? ids.twins[pct][Number(m[2])] : undefined
+      if (twin !== undefined) ctx.paraXmls[last] = ctx.paraXmls[last].replace(m![0], `<hp:p ${m![1]}paraPrIDRef="${twin}"`)
     }
 
     // 개조식 전면부(표지·목차) 뒤 본문 첫 블록은 새 페이지에서

@@ -475,8 +475,8 @@ export function generateTable(rows: string[][], theme: ResolvedTheme, style: Gon
 
   // 실측 모드: 데이터 표 호스트 문단 RIGHT (실측: GT6/GT7/GT11 관행, TBL-09)
   const hostPr = reg && style?.rightParaPr !== undefined ? style.rightParaPr : 0
-  // 2행 이상은 부유 앵커 — 한글이 쪽 경계에서 나눌 수 있도록 (tablePosXml 참조)
-  const float = rowCnt >= 2
+  // 2행 이상은 부유 앵커 — 한글이 쪽 경계에서 나눌 수 있도록 (tablePosXml 참조). 한전 개조식은 글자처럼 취급(사용자 지정 — 표는 한 쪽 안에)
+  const float = rowCnt >= 2 && !style?.kepcoGrid
 
   // <hp:tbl>에 필수 속성 + <hp:sz>/<hp:outMargin>/<hp:inMargin>
   const tblInner = `<hp:sz width="${tblW}" widthRelTo="ABSOLUTE" height="${tblH}" heightRelTo="ABSOLUTE" protect="0"/>`
@@ -721,7 +721,7 @@ export function generateHtmlTableXml(rawHtml: string, theme: ResolvedTheme, tota
   const tableH = tableRowHeights.reduce((sum, height) => sum + height, 0)
   // 2행 이상 최상위 표는 부유 앵커 (tablePosXml 참조) — 호스트 문단은 호출자가 감싸며
   // 실측 모드(bfRegistry)에서 우측정렬이라 horzAlign도 같이 맞춘다
-  const float = !nested && rowCnt >= 2
+  const float = !nested && rowCnt >= 2 && !style?.kepcoGrid
 
   return `<hp:tbl id="${tblId}" zOrder="0" numberingType="TABLE"${float ? FLOAT_TBL_ATTRS : ""} pageBreak="CELL" repeatHeader="${style ? 1 : 0}" rowCnt="${rowCnt}" colCnt="${colCnt}" cellSpacing="0" borderFillIDRef="2" noShading="0">`
     + `<hp:sz width="${tblW}" widthRelTo="ABSOLUTE" height="${tableH}" heightRelTo="ABSOLUTE" protect="0"/>`

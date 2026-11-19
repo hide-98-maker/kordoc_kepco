@@ -107,22 +107,33 @@ describe("한전 개조식", () => {
     assert.equal(off.stepSpacing, false)
   })
 
-  it("간격 — 문단 위 5pt 기본, 장 제목 200%·아래 0, * 220%, * 바로 앞 문단 180%", async () => {
+  it("간격 — 문단 위는 모두 5pt, 앞 문단 줄간격으로 장 제목 앞 300%·□ 앞 250%·* 앞 180%, * 220%", async () => {
     const { sec, hdr } = await parts(kepco)
     const pp = (id: number) => {
       const b = hdr.slice(hdr.indexOf(`<hh:paraPr id="${id}"`), hdr.indexOf("</hh:paraPr>", hdr.indexOf(`<hh:paraPr id="${id}"`)))
       return { prev: Number(b.match(/<hc:prev value="(-?\d+)"/)![1]), next: Number(b.match(/<hc:next value="(-?\d+)"/)![1]), ls: Number(b.match(/lineSpacing type="PERCENT" value="(\d+)"/)![1]) }
     }
-    assert.deepEqual(pp(23), { prev: 2000, next: 0, ls: 200 }, "장 제목: 5pt + 300% 몫, 아래 0, 200%")
-    assert.deepEqual(pp(8), { prev: 1250, next: 0, ls: 200 }, "□: 5pt + 250% 몫")
-    assert.deepEqual(pp(9), { prev: 500, next: 0, ls: 200 }, "○: 5pt")
-    assert.deepEqual(pp(20), { prev: 500, next: 0, ls: 220 }, "*: 5pt, 220%")
-    // * 바로 앞 '-' 문단은 180% 짝 paraPr
-    const before = sec.slice(0, sec.indexOf("<hp:t>*<hp:tab"))
-    const opens = [...before.matchAll(/<hp:p (?:pageBreak="1" )?paraPrIDRef="(\d+)"/g)]
-    const prevId = Number(opens[opens.length - 2][1]) // 마지막은 * 문단 자신
-    assert.equal(pp(prevId).ls, 180)
-    assert.equal(pp(prevId).prev, 500)
+    assert.deepEqual(pp(23), { prev: 500, next: 0, ls: 200 }, "장 제목: 위 5pt, 아래 0, 200%")
+    assert.deepEqual(pp(8), { prev: 500, next: 0, ls: 200 }, "□: 위 5pt")
+    assert.deepEqual(pp(9), { prev: 500, next: 0, ls: 200 }, "○: 위 5pt")
+    assert.deepEqual(pp(20), { prev: 500, next: 0, ls: 220 }, "*: 위 5pt, 220%")
+    // 본문 문단 순서대로 [paraPr, 첫 글자]
+    const body = sec.slice(sec.lastIndexOf("<hp:p ", sec.indexOf("1. 추진배경")))
+    const seq = [...body.matchAll(/<hp:p (?:pageBreak="1" )?paraPrIDRef="(\d+)"[^>]*><hp:run[^>]*>(?:<hp:ctrl>[\s\S]*?<\/hp:ctrl>)*<hp:t>([^<]{0,6})/g)].map((m) => [Number(m[1]), m[2]] as const)
+    const lsOf = (text: string) => pp(seq.find(([, t]) => t.startsWith(text))![0])
+    assert.equal(lsOf("1. 추진").ls, 250, "□ 앞 장 제목 → 250%")
+    assert.equal(lsOf("-").ls, 180, "* 앞 - → 180%")
+    assert.equal(lsOf("*").ls, 300, "장 제목 앞 * → 300%")
+    for (const [id] of seq.slice(0, 6)) assert.equal(pp(id).prev, 500, "문단 위는 짝도 5pt")
+  })
+
+  it("표 — 글자처럼 취급 + 오른쪽 정렬, 한 쪽을 넘는 표는 경고", async () => {
+    const { sec } = await parts({ ...kepco, approvalCover: undefined })
+    assert.ok(!sec.includes('treatAsChar="0"'))
+    const rows = Array.from({ length: 40 }, (_, i) => `| ${i} | 긴 내용 ${i} |`).join("\n")
+    const warnings: string[] = []
+    await markdownToHwpx(`## 현황\n\n| 구분 | 내용 |\n|---|---|\n${rows}\n`, { gongmun: kepco as never, warnings })
+    assert.ok(warnings.some((w) => w.includes("한 쪽 본문 높이를 넘습니다")), warnings.join("\n"))
   })
 
   it("□ 첫 괄호 — 한컴 윤고딕 740 굵게 #203A7B, □ 크기, 괄호 없는 □ 는 그대로", async () => {

@@ -38,7 +38,16 @@ export function parseAttachHeading(text: string): { no: string; title: string } 
 export function gaejosikExtraParaIds(g: Pick<ResolvedGongmun, "stepIndent" | "stepSpacing" | "kepco">, variantCount: number, variantBase: number): { sectionBand?: number; attach?: KepcoAttachParaIds } {
   let next = variantBase + variantCount
   const sectionBand = g.stepIndent || g.stepSpacing ? next++ : undefined
-  const attach = g.kepco ? { first: next++, next: next++, hostDae: next++, hostOther: next++, before180: [next++, next++, next++, next++] } : undefined
+  let attach: KepcoAttachParaIds | undefined
+  if (g.kepco) {
+    const first = next++, nxt = next++, hostDae = next++, hostOther = next++
+    const twins: Record<number, Record<number, number>> = {}
+    for (const pct of KEPCO_TWIN_SPACINGS) {
+      twins[pct] = {}
+      for (const b of KEPCO_TWIN_BASES) twins[pct][b] = next++
+    }
+    attach = { first, next: nxt, hostDae, hostOther, twins }
+  }
   return { sectionBand, attach }
 }
 
@@ -74,14 +83,28 @@ export function buildKepcoAttachTitle(no: string, title: string, bodyWidth: numb
 // ─── 붙임 목록 ──────────────────────────────────────
 
 /** 목록 문단 paraPr 둘(첫 줄·다음 줄) — gen-header 가 변형 paraPr 뒤에 붙이고 gen-section 이 같은 식으로 id 를 찾는다 */
-export interface KepcoAttachParaIds { first: number; next: number; hostDae: number; hostOther: number; before180: number[] }
+export interface KepcoAttachParaIds {
+  first: number; next: number; hostDae: number; hostOther: number
+  /** 줄간격 짝 paraPr — twins[줄간격][원래 paraPr id] = 짝 id. 다음 문단에 따라 앞 문단 줄간격만 바꾼다 */
+  twins: Record<number, Record<number, number>>
+}
+
+/**
+ * 줄간격 짝을 만드는 원래 paraPr — 본문 0·□○-ㆍ(8~11)·가운데(16)·오른쪽(표 호스트·출처 17)·*(20)·장 제목(23)·긴 출처(34).
+ * 한글은 줄간격이 그 줄과 다음 줄 사이를 정하므로 "앞 문단 → 다음 문단" 간격은 앞 문단 줄간격으로 낸다.
+ */
+export const KEPCO_TWIN_BASES = [0, 8, 9, 10, 11, 16, 17, 20, 23, 34]
+/** 짝 줄간격 — * 앞 180%, □ 앞 250%, 장 제목 앞 300%(사용자 지정 2026-11-19) */
+export const KEPCO_TWIN_SPACINGS = [180, 250, 300]
+/** 다음 문단 첫 paraPr → 앞 문단이 가질 줄간격 */
+export function kepcoSpacingBefore(nextParaPr: number): number | undefined {
+  return nextParaPr === 20 ? 180 : nextParaPr === 8 ? 250 : nextParaPr === 23 ? 300 : undefined
+}
 
 /** 한전 개조식 문단 위 간격 — 모든 본문 문단 5pt(레퍼런스 □·○ 문단 위 500) */
 export const KEPCO_PARA_BEFORE = 500
 /** * 참고 문단 줄간격 — * 와 아래 문단 사이 220%(사용자 지정) */
 export const KEPCO_REF_LINE_SPACING = 220
-/** * 바로 앞 문단 줄간격 — 위 문단과 * 사이 180%(사용자 지정) */
-export const KEPCO_BEFORE_REF_LINE_SPACING = 180
 /** □ 문장 첫 괄호 "(분산e 특성)" 글꼴·색 — 레퍼런스 한컴 윤고딕 740 굵게 #203A7B(크기는 □ 본문과 같게, 사용자 지정) */
 export const KEPCO_PAREN_FONT = "한컴 윤고딕 740"
 export const KEPCO_PAREN_COLOR = "#203A7B"

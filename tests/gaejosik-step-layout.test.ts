@@ -64,12 +64,12 @@ describe("개조식 단계별 들여쓰기·간격 (stepIndent·stepSpacing)", (
     assert.notEqual(on.host, prev.host)
   })
 
-  it("stepSpacing — □○- 줄간격 200%, □ 앞 50%·장 띠 앞 100% 몫", async () => {
+  it("stepSpacing — 모든 문단 위 5pt, 줄간격은 □ 250%·○- 200%, 띠는 5pt + 몫", async () => {
     const p = await paraPrs(await markdownToHwpx(md, { gongmun: { ...base, stepSpacing: true } }))
-    for (const id of [8, 9, 10]) assert.equal(p.get(id)!.line, 200, `paraPr ${id}`)
-    assert.equal(p.get(8)!.prev, 750)
-    assert.equal(p.get(9)!.prev, 0)
-    assert.equal(p.get(23)!.prev, 1500)
+    assert.equal(p.get(8)!.line, 250)
+    for (const id of [9, 10]) assert.equal(p.get(id)!.line, 200, `paraPr ${id}`)
+    for (const id of [8, 9, 10]) assert.equal(p.get(id)!.prev, 500, `paraPr ${id} 문단 위 5pt`)
+    assert.equal(p.get(23)!.prev, 2000)
     assert.equal(p.get(20)!.prev, 2340, "※ 위 180%")
     assert.equal(p.get(20)!.line, 200)
   })
