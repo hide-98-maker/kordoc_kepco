@@ -6,12 +6,12 @@ import type { numberBlocksFromIR } from "../hwpx/number-lint.js"
 import { runLintSuite } from "../hwpx/lint-suite.js"
 import { lintBlocks } from "../hwpx/lint-blocks.js"
 import { extractLevelStyles } from "../hwpx/level-styles.js"
-import { detectFormat, markdownToHwpx, hwpxToHwp, loadAgencyPack, packTemplate, resolvePackKind, packRoleWarnings, hwpxToProfile, PRESET_ALIAS, unknownFontWarnings, incompatibleGongmunWarnings, gongmunLintWarnings, muncheLintWarnings, usesGaejosikMunche, slopLintWarnings, logicLintWarnings, usesLogicStructure, gongmunGate, formatGateFinding } from "../index.js"
+import { detectFormat, markdownToHwpx, hwpxToHwp, loadAgencyPack, packTemplate, resolvePackKind, packRoleWarnings, hwpxToProfile, PRESET_ALIAS, isKepcoPresetAlias, unknownFontWarnings, incompatibleGongmunWarnings, gongmunLintWarnings, muncheLintWarnings, usesGaejosikMunche, slopLintWarnings, logicLintWarnings, usesLogicStructure, gongmunGate, formatGateFinding } from "../index.js"
 import { parseFormatProfileJson } from "../hwpx/profile-io.js"
 import { loadGenerationImages } from "../shared/generate-images.js"
 import { measurePdfLayout } from "../pdf/layout-measure.js"
 import { applyMeasuredLayout } from "../hwpx/layout-options.js"
-import { buildGongmunOptions, BODY_FONTS, H2_MARKERS, BULLET2_CHARS, TOTAL_ROWS, parseLevelsSpec, levelFontRecord, templateConflictMessage } from "../hwpx/gongmun-surface.js"
+import { buildGongmunOptions, parseApprovalCover, BODY_FONTS, H2_MARKERS, BULLET2_CHARS, TOTAL_ROWS, parseLevelsSpec, levelFontRecord, templateConflictMessage } from "../hwpx/gongmun-surface.js"
 import type { FormatProfile } from "../hwpx/gen-profile.js"
 import { toArrayBuffer, sanitizeError } from "../utils.js"
 import type { Command } from "commander"
@@ -19,7 +19,7 @@ import type { Command } from "commander"
 /** --template 과 함께 못 쓰는 옵션 (commander 키) — 서식·쪽·이미지는 견본이 정한다 */
 const TEMPLATE_CLI_CONFLICTS = [
   "preset", "font", "pt", "lineSpacing", "profile", "org", "date", "toc", "cover", "approval", "pageNumbers", "endMark",
-  "bodyTitleBox", "chapterFit", "stepIndent", "stepSpacing", "h2Marker", "bandColor", "bandTextColor", "summary", "docInfo", "dept", "checklist", "coverLabel",
+  "bodyTitleBox", "chapterFit", "stepIndent", "stepSpacing", "approvalCover", "h2Marker", "bandColor", "bandTextColor", "summary", "docInfo", "dept", "checklist", "coverLabel",
   "fonts", "sizes", "levels", "levelsFrom", "layout", "bullet2", "agency", "suppressSingle", "docHead", "docFoot", "reportInfo",
   "noticeHead", "pressHead", "pressSub", "pressPeople", "plain", "paper", "landscape", "columns", "columnGap", "columnLine", "header", "footer",
   "imageDir", "inlineMath",
@@ -53,6 +53,7 @@ export function registerGenerateCommands(program: Command): void {
     .option("--no-body-title-box", "본문 첫 페이지 제목 반복 박스 끄기 (개조식+표지 기본 켜짐)")
     .option("--chapter-fit", "개조식 장 헤더 제목 칸을 글자 폭에 맞춤 (기본: 본문 폭까지)")
     .option("--step-indent", "개조식 단계별 계단 들여쓰기 (장 띠 0·절 띠 1칸·□ 2칸·○ 3칸·- 4칸, 1칸=16pt 글자 폭)")
+    .option("--approval-cover <json>", '한전 다단 결재 표지(개조식) JSON: {"signers":["차장","부장","처장"],"org":"배전운영처","dept":"배전계통부","subtitle":"부제","author":{"rank":"차장","name":"홍길동","phone":"061-0000"},"agree":"합의 부서"}')
     .option("--step-spacing", "개조식 단계별 간격 (□○- 줄간격 200%·장절 띠 앞 300%·□ 앞 250%)")
     .option("--h2-marker <type>", "h2 장 제목 표기: band(로마자 채움 칸 + 제목 띠 표 — 보고서·계획서 기본)·roman(Ⅰ. 텍스트)·number(1. — 통지 기본)·box(장 없이 □ 대항목)·none")
     .option("--band-color <hex>", "띠 제목 번호칸 채움색 #RRGGBB (기본 #003366 — 실측 최다. 교육청형 밝은 띠: #DFE6F7)")
@@ -236,6 +237,8 @@ export function registerGenerateCommands(program: Command): void {
             bodyTitleBox: opts.bodyTitleBox === false ? false : undefined,
             chapterFit: opts.chapterFit,
             stepIndent: opts.stepIndent, stepSpacing: opts.stepSpacing,
+            kepco: isKepcoPresetAlias(presetKey) || undefined,
+            approvalCover: opts.approvalCover ? parseApprovalCover(String(opts.approvalCover)) : undefined,
             h2Marker: enumCheck("--h2-marker", opts.h2Marker, H2_MARKERS),
             bandColor: opts.bandColor, bandTextColor: opts.bandTextColor,
             fonts: opts.fonts ? parseKv(String(opts.fonts), "--fonts") : undefined,

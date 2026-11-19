@@ -5,6 +5,7 @@
 import { type ResolvedGongmun, levelIndent, levelMarkerHeight, markerWidth, needsGaejosikAssets, usesAsteriskThird, usesReportFonts } from "./gongmun.js"
 import { KordocError, VERSION } from "../utils.js"
 import { GJ_CHAR_APPROVAL, GJ_CHAR_TITLE_BAR, GONGMUN_APPROVAL_CHAR, GONGMUN_TBL_PT, GONGMUN_TITLE_BAR_CHAR, charVariantBase } from "./gen-ids.js"
+import { gaejosikExtraParaIds } from "./gen-kepco.js"
 import { GAEJOSIK_STEP_LINE_SPACING, GAEJOSIK_STEP_UNIT, gaejosikStepSpaceBefore, gaejosikStepChamGap, gaejosikSizes, gaejosikSpaceBefore, gaejosikChamIndent, gaejosikTocItemIndent, GAEJOSIK_COLORS } from "./gaejosik.js"
 import {
   NS_HEAD, NS_OPF, NS_HPF, NS_OCF, NS_PARA, NS_CORE,
@@ -310,11 +311,20 @@ function buildParaProperties(gongmun: ResolvedGongmun | null, listIndentVariants
     base.push(paraPr(GONGMUN_LIST_VARIANT_BASE + vi, { align: listAlign, lineSpacing: lsList, left, indent: -widthHu, spaceBefore: sectionGap, keepWord: true, keepWithNext: keepNext, autoTab: true }))
   }
   // 절 띠 전용 — stepIndent 면 왼쪽 1칸, stepSpacing 이면 앞 간격 (id = 변형 뒤 첫 번호, gen-section 이 같은 식으로 조회)
-  if (gongmun.stepIndent || gongmun.stepSpacing) {
-    base.push(paraPr(GONGMUN_LIST_VARIANT_BASE + listIndentVariants.length, {
+  const extra = gaejosikExtraParaIds(gongmun, listIndentVariants.length, GONGMUN_LIST_VARIANT_BASE)
+  if (extra.sectionBand !== undefined) {
+    base.push(paraPr(extra.sectionBand, {
       align: "LEFT", lineSpacing: ls, left: gongmun.stepIndent ? GAEJOSIK_STEP_UNIT : 0,
       spaceBefore: gongmun.stepSpacing ? gaejosikStepSpaceBefore("band", gongmun.bodyHeight) : 2400, spaceAfter: 600, keepWord: true, keepWithNext: true,
     }))
+  }
+  // 붙임 목록(kepco) — 첫 줄은 "붙 임 " 머리 폭만큼 내어쓰고 나머지 줄은 번호 자리에 맞춘다
+  if (extra.attach) {
+    const hang = markerWidth("붙 임", gongmun.bodyHeight)
+    base.push(
+      paraPr(extra.attach.first, { align: "LEFT", lineSpacing: lsList, left: hang, indent: -hang, spaceBefore: 600, keepWord: true }),
+      paraPr(extra.attach.next, { align: "LEFT", lineSpacing: lsList, left: hang, indent: 0, keepWord: true }),
+    )
   }
   assertSequentialIds(base, "paraPr", 0)
   return `<hh:paraProperties itemCnt="${base.length}">\n${base.join("\n")}\n    </hh:paraProperties>`

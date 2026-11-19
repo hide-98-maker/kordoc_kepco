@@ -1,0 +1,127 @@
+/**
+ * 한전 개조식(kepco 변형) — 번호 제목 문단·□○ 글꼴·붙임 제목 띠와 목록·다단 결재 표지. 기본(개조식)은 그대로.
+ */
+import { describe, it } from "node:test"
+import assert from "node:assert/strict"
+import JSZip from "jszip"
+import { markdownToHwpx, parse, PRESET_ALIAS, isKepcoPresetAlias } from "../src/index.js"
+import { buildGongmunOptions } from "../src/hwpx/gongmun-surface.js"
+import { resolveGongmun } from "../src/hwpx/gongmun.js"
+
+const md = `# 분산e 단선 역가압 해소 방안
+
+## 추진배경
+
+### 분산e 연계선로 단선 대응 필요
+
+- 이력 관리 지원
+  - 인증은 토큰으로 설정
+
+※ 동작시간은 0.5초~2초
+
+## 현황
+
+### (특성) 단선 시 역가압 발생
+
+- 문제점 : 미개방
+
+## 붙임 1. 현재 대응대책
+
+### (개요) 현행 대책
+
+## 붙임 2. 요약
+
+### (개요) 과제
+`
+const cover = { org: "배전운영처", dept: "배전계통부", subtitle: "ADMS 기반", author: { rank: "차장", name: "홍길동", phone: "061-0000" } }
+const kepco = { preset: "gaejosik" as const, kepco: true, approvalCover: cover }
+
+async function parts(opts: object): Promise<{ sec: string; hdr: string }> {
+  const z = await JSZip.loadAsync(await markdownToHwpx(md, { gongmun: opts as never }))
+  return { sec: await z.file("Contents/section0.xml")!.async("text"), hdr: await z.file("Contents/header.xml")!.async("text") }
+}
+const texts = (sec: string) => [...sec.matchAll(/<hp:t>([^<]*)<\/hp:t>/g)].map((m) => m[1])
+
+describe("한전 개조식", () => {
+  it("별칭 — 한전 개조식·한전개조식·kepco 가 개조식 키로 풀리고 변형 판정이 선다", () => {
+    for (const k of ["한전 개조식", "한전개조식", "kepco"]) {
+      assert.equal(PRESET_ALIAS[k], "gaejosik")
+      assert.equal(isKepcoPresetAlias(k), true)
+    }
+    assert.equal(isKepcoPresetAlias("개조식"), false)
+    assert.equal(Object.keys(PRESET_ALIAS)[0], "한전 개조식", "프리셋 목록 맨 앞")
+  })
+
+  it("기본(개조식)은 변형 없음 — 장 띠·목차 그대로", async () => {
+    const { sec } = await parts({ preset: "gaejosik", cover: false })
+    assert.ok(!texts(sec).some((t) => /^1\. 추진배경/.test(t)))
+    assert.equal(resolveGongmun({ preset: "gaejosik" }).kepco, false)
+    assert.equal(resolveGongmun({ preset: "report", kepco: true }).kepco, false)
+  })
+
+  it("장 제목은 띠 없는 '1. 제목', 붙임은 번호를 세지 않는다", async () => {
+    const { sec } = await parts(kepco)
+    const t = texts(sec)
+    assert.ok(t.includes("1. 추진배경"))
+    assert.ok(t.includes("2. 현황"))
+    assert.ok(!t.some((s) => /^3\. 붙임/.test(s)))
+    assert.ok(!t.includes("목  차") && !t.includes("목 차"), "목차 기본 꺼짐")
+  })
+
+  it("□ 휴먼명조 16pt · ○ 휴먼명조 15pt · ※ 맑은 고딕 13pt", async () => {
+    const { hdr } = await parts(kepco)
+    const faces = [...hdr.matchAll(/<hh:fontface lang="HANGUL"[\s\S]*?<\/hh:fontface>/g)][0][0]
+    const font = (id: number) => faces.match(new RegExp(`<hh:font id="${id}" face="([^"]*)"`))?.[1] ?? ""
+    const cp = (id: number) => hdr.match(new RegExp(`<hh:charPr id="${id}" height="(\\d+)"[\\s\\S]*?<hh:fontRef hangul="(\\d+)"`))!
+    // ※ 참고 charPr 13 = 맑은 고딕 13pt
+    assert.equal(cp(13)[1], "1300")
+    assert.equal(font(Number(cp(13)[2])), "맑은 고딕")
+    // levels 가 만든 □·○ 전용 charPr — 휴먼명조 1600·1500
+    const all = [...hdr.matchAll(/<hh:charPr id="(\d+)" height="(\d+)"[\s\S]*?<hh:fontRef hangul="(\d+)"/g)].map((m) => [Number(m[2]), font(Number(m[3]))] as const)
+    assert.ok(all.some(([h, f]) => h === 1600 && f === "휴먼명조"))
+    assert.ok(all.some(([h, f]) => h === 1500 && f === "휴먼명조"))
+  })
+
+  it("붙임 — 새 쪽에서 시작하는 회색 제목 띠 + 본문 끝 목록('붙 임 1. …  1부.', 끝.)", async () => {
+    const { sec } = await parts(kepco)
+    assert.equal((sec.match(/name="__kordoc_attach"/g) ?? []).length, 2)
+    assert.equal((sec.match(/pageBreak="1"/g) ?? []).length >= 2, true)
+    const t = texts(sec)
+    assert.ok(t.includes("붙임 1") && t.includes("붙임 2"))
+    assert.ok(t.some((s) => s.startsWith("붙 임 1. 현재 대응대책") && s.includes("1부.")))
+    assert.ok(t.some((s) => s.startsWith("2. 요약") && s.endsWith("1부. 끝.")))
+    // 목록은 첫 붙임 제목 띠보다 앞
+    assert.ok(sec.indexOf("붙 임 1.") < sec.indexOf("붙임 1</hp:t>"))
+  })
+
+  it("다단 결재 표지 — 결재표(기본 차장·부장·처장)·합의·문서번호 상자·제목 '( 안 )'·처·부·작성자", async () => {
+    const { sec } = await parts(kepco)
+    const t = texts(sec)
+    for (const s of ["차장", "부장", "처장", "합의", "문서번호", "등 록 일", "보존기간", "공개구분", "공개", "ADMS 기반", "분산e 단선 역가압 해소 방안 ( 안 )", "배전운영처", "배전계통부"]) {
+      assert.ok(t.includes(s), `표지에 ${s}`)
+    }
+    assert.ok(t.includes("작성자 : 배전계통부 차장 홍길동 (☎ 061-0000)"))
+  })
+
+  it("결재 직위·합의 지정과 합의 줄 제거", async () => {
+    const a = await parts({ ...kepco, approvalCover: { ...cover, signers: ["과장", "부장"], agree: "계통운영부" } })
+    const t = texts(a.sec)
+    assert.ok(t.includes("과장") && t.includes("계통운영부") && !t.includes("처장"))
+    const b = await parts({ ...kepco, approvalCover: { ...cover, agree: false } })
+    assert.ok(!texts(b.sec).includes("합의"))
+  })
+
+  it("왕복 — 파서가 읽고, step 옵션과도 함께 동작", async () => {
+    const buf = await markdownToHwpx(md, { gongmun: { ...kepco, stepIndent: true, stepSpacing: true } as never })
+    const back = await parse(buf)
+    assert.ok(back.success)
+    assert.ok((back.markdown ?? "").includes("추진배경"))
+  })
+
+  it("CLI·MCP 공용 조립이 kepco·approvalCover 를 전달", () => {
+    const o = buildGongmunOptions({ preset: "gaejosik", kepco: true, approvalCover: cover })
+    assert.equal(o.kepco, true)
+    assert.deepEqual(o.approvalCover, cover)
+    assert.ok(!("kepco" in buildGongmunOptions({ preset: "gaejosik" })))
+  })
+})

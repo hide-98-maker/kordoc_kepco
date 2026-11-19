@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- 프리셋 `한전 개조식`(별칭 `한전개조식`·`kepco`, 목록 맨 앞): 개조식 변형. 장 제목은 띠 없는 `1. 제목`(HY헤드라인M 17pt), □ 휴먼명조 16pt, ○ 휴먼명조 15pt, ※ 맑은 고딕 13pt. `## 붙임 N. 제목` 은 회색 제목 띠(새 쪽)와 본문 끝 붙임 목록(`붙 임 1. … 1부.`)을 만든다. 표지·목차·본문 제목 상자는 기본 꺼짐.
+- `approvalCover`(CLI `--approval-cover <json>`, MCP `approval_cover`): 한전 다단 결재 표지 — 결재표(기본 차장·부장·처장)·합의 줄·문서번호 상자·부제와 제목 `( 안 )`·처·부·작성자. 개조식 전용.
+
+### Fixed
+
+- 개조식에서 `levels` 를 주어도 `### 제목`(□)·`#### 제목`(○) 문단에는 적용되지 않던 것을 고쳤다(목록으로 쓴 □·○ 에만 적용됐다).
+
+### Added
+
 - 개조식 `stepIndent`(CLI `--step-indent`, MCP `step_indent`): 단계마다 1칸(16pt 글자 폭)씩 들여쓴다 — 장 띠 0·절 띠 1칸·□ 2칸·○ 3칸·- 4칸. ※ 참고는 - 와 같은 자리, □ 아래 데이터 표는 □ 위치에서 시작한다. 기본 꺼짐.
 - 개조식 `stepSpacing`(CLI `--step-spacing`, MCP `step_spacing`): □·○·- 줄간격 200%, 장·절 띠 앞 300%, □ 앞 250%를 문단 위 간격으로 낸다. 기본 꺼짐. 두 옵션은 생성 뒤 header·section 을 손으로 고치던 후처리를 생성기 안으로 옮긴 것이다.
 

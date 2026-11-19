@@ -18,6 +18,21 @@ import { hangulOrdinal, circledNumber, circledHangul } from "../shared/numbering
 
 // ─── 옵션 타입 ──────────────────────────────────────
 
+import { type ApprovalCoverOptions, DEFAULT_SIGNERS } from "./gen-kepco.js"
+
+/** 해석된 결재 표지 옵션 — 컨테이너는 늘 있다 */
+export interface ResolvedApprovalCover {
+  signers: string[]
+  agree?: string | false
+  subtitle?: string
+  draft: boolean
+  org?: string
+  dept?: string
+  author: { dept?: string; rank?: string; name?: string; phone?: string }
+  docInfo: { docNo?: string; regDate?: string; retention?: string; openness?: string }
+}
+export type { ApprovalCoverOptions }
+
 export type GongmunPreset = "official" | "report" | "plan" | "notice" | "minutes" | "gaejosik" | "press" | "ministry" | "bangchim"
 export type GongmunNumbering = "standard" | "report" | "gaejosik"
 /** 2단계 항목부호 */
@@ -33,6 +48,7 @@ export type GongmunPresetInput =
   | "통지" | "알림" | "안내"
   | "회의록"
   | "개조식" | "개조식보고서" | "정부보고서" | "정부표준개조식보고서"
+  | "한전개조식" | "한전 개조식" | "kepco"
   | "보도자료"
   | "업무보고" | "부처업무보고" | "중앙부처보고서"
   | "서울방침" | "방침서" | "방침"
@@ -118,6 +134,16 @@ export interface GongmunOptions {
    * □ 아래 데이터 표는 □ 위치(2칸)에서 시작해 오른쪽 끝에 맞추고, ※ 참고 줄은 ○ 위치(3칸). 개조식 전용, 기본 꺼짐
    */
   stepIndent?: boolean
+  /**
+   * 한전 개조식(개조식 변형) — 장 제목은 띠 없이 "1. 제목"(HY헤드라인M 17pt), □ 휴먼명조 16pt, ○ 휴먼명조 15pt,
+   * ※ 맑은 고딕 13pt, `## 붙임 N. 제목` 은 회색 제목 띠 + 본문 끝 붙임 목록. 한전 계획보고 레퍼런스 기준. 개조식 전용, 기본 꺼짐
+   */
+  kepco?: boolean
+  /**
+   * 한전 다단 결재 표지 — 결재표(기본 차장·부장·처장) + 합의 줄 + 문서번호 상자 + 부제·제목 + 처·부 + 작성자.
+   * 주면 개조식 표지(파랑 바) 대신 이 표지를 만든다. 개조식 전용
+   */
+  approvalCover?: ApprovalCoverOptions
   /** 개조식 단계별 간격 — □·○·- 줄간격 200%, 장·절 띠 앞 300%, □ 앞 250%(문단 위 간격 값으로 맞춤). 개조식 전용, 기본 꺼짐 */
   stepSpacing?: boolean
   /**
@@ -233,6 +259,10 @@ export interface ResolvedGongmun {
   bodyTitleBox: boolean
   /** 개조식 장 헤더 제목 칸 글자 폭 맞춤 — 기본 꺼짐 */
   chapterFit: boolean
+  /** 한전 개조식 변형(개조식 전용) */
+  kepco: boolean
+  /** 한전 다단 결재 표지 — null 이면 없음 */
+  approvalCover: ResolvedApprovalCover | null
   /** 개조식 단계별 계단 들여쓰기(개조식 전용 — 다른 프리셋은 항상 false) */
   stepIndent: boolean
   /** 개조식 단계별 간격(개조식 전용 — 다른 프리셋은 항상 false) */
@@ -307,6 +337,8 @@ const PRESET_DEFAULTS: Record<
 
 /** 프리셋 별칭(한글/영문) → 내부 preset 키. CLI·라이브러리 공용 */
 export const PRESET_ALIAS: Record<string, GongmunPreset> = {
+  // 한전 개조식 — 내부 프리셋은 개조식, 변형(GongmunOptions.kepco)은 isKepcoPresetAlias 로 켠다. 목록 맨 앞
+  "한전 개조식": "gaejosik", 한전개조식: "gaejosik", kepco: "gaejosik",
   official: "official", 기안문: "official", 시행문: "official", 공문: "official", 공문서: "official",
   report: "report", 보고서: "report",
   plan: "plan", 계획서: "plan", 계획: "plan",
@@ -316,6 +348,11 @@ export const PRESET_ALIAS: Record<string, GongmunPreset> = {
   press: "press", 보도자료: "press",
   ministry: "ministry", 업무보고: "ministry", 부처업무보고: "ministry", 중앙부처보고서: "ministry",
   bangchim: "bangchim", 서울방침: "bangchim", 방침서: "bangchim", 방침: "bangchim",
+}
+
+/** 한전 개조식 별칭인지 — CLI·MCP 가 GongmunOptions.kepco 를 켤 때 쓴다 */
+export function isKepcoPresetAlias(preset?: string): boolean {
+  return typeof preset === "string" && ["kepco", "한전개조식", "한전 개조식"].includes(preset.trim())
 }
 
 /** 프리셋 입력(영문 키 또는 한글 별칭)을 내부 GongmunPreset로 정규화. 미상은 'official'.
@@ -481,11 +518,43 @@ function hexColorOption(name: string, value: string | undefined): string | undef
   return v.toUpperCase()
 }
 
+/** 한전 개조식 기본값 — 사용자가 준 옵션이 우선, 빈 자리만 채운다 */
+function kepcoDefaults(o: GongmunOptions): GongmunOptions {
+  return {
+    ...o,
+    // □ 휴먼명조 16pt · ○ 휴먼명조 15pt (한전 계획보고 레퍼런스), - 는 본문(휴먼명조 15pt) 그대로
+    levels: { 0: { font: "휴먼명조", pt: 16 }, 1: { font: "휴먼명조", pt: 15 }, ...(o.levels ?? {}) },
+    // ※ 는 맑은 고딕 13pt (크기는 개조식 ※ 기본 13pt)
+    fonts: { ref: "맑은 고딕", ...(o.fonts ?? {}) },
+    bodyTitleBox: o.bodyTitleBox ?? false,
+    toc: o.toc ?? false,
+    cover: o.cover ?? !!o.approvalCover,
+  }
+}
+
+function resolveApprovalCover(a: ApprovalCoverOptions): ResolvedApprovalCover {
+  const signers = (a.signers ?? DEFAULT_SIGNERS).map((s) => String(s).trim()).filter(Boolean)
+  if (signers.length < 1 || signers.length > 5) throw new KordocError("approvalCover.signers: 결재 직위는 1~5개여야 합니다")
+  return {
+    signers,
+    agree: a.agree,
+    subtitle: a.subtitle?.trim() || undefined,
+    draft: a.draft ?? true,
+    org: a.org?.trim() || undefined,
+    dept: a.dept?.trim() || undefined,
+    author: { dept: a.author?.dept ?? a.dept, rank: a.author?.rank, name: a.author?.name, phone: a.author?.phone },
+    docInfo: a.docInfo ?? {},
+  }
+}
+
 export function resolveGongmun(input: GongmunOptions): ResolvedGongmun {
   validateGongmunOptions(input)
   const preset = normalizeGongmunPreset(input.preset)
   // 기관 서식은 명시 옵션이 비운 자리만 채운다 — 이 아래는 깔린 옵션으로 해석
-  const { opts, agency } = applyAgency(input, preset)
+  const kepco = preset === "gaejosik" && !!input.kepco
+  const applied = applyAgency(input, preset)
+  const agency = applied.agency
+  const opts = kepco ? kepcoDefaults(applied.opts) : applied.opts
   const d = PRESET_DEFAULTS[preset]
   const bodyPt = opts.bodyPt ?? d.bodyPt
   const autoFitMinRatio =
@@ -540,6 +609,8 @@ export function resolveGongmun(input: GongmunOptions): ResolvedGongmun {
     // 표지 없는 개조식은 맨 앞 h1 하나를 이 상자로 그린다(실측: 표지 없는 □ 문서 139건 중 73건이 제목을 상자 표에)
     bodyTitleBox: opts.bodyTitleBox ?? gaejosik,
     chapterFit: opts.chapterFit ?? false,
+    kepco,
+    approvalCover: gaejosik && opts.approvalCover ? resolveApprovalCover(opts.approvalCover) : null,
     stepIndent: gaejosik && (opts.stepIndent ?? false),
     stepSpacing: gaejosik && (opts.stepSpacing ?? false),
     // h2 말머리 — 실측: 보고서 양식 □ 대항목(QA-2), 공고문 아라비아("1. 사업개요", 바이오헬스 실측)

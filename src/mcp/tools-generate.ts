@@ -3,7 +3,7 @@
 import { z } from "zod"
 import { readFile, mkdir } from "fs/promises"
 import { dirname } from "path"
-import { markdownToHwpx, hwpxToHwp, buildAgencyPack, loadAgencyPack, packTemplate, resolvePackKind, packRoleWarnings, packSummary, unknownFontWarnings, usesGaejosikMunche, PRESET_ALIAS, incompatibleGongmunWarnings, gongmunLintWarnings, muncheLintWarnings, slopLintWarnings, logicLintWarnings, usesLogicStructure, gongmunGate, formatGateFinding } from "../index.js"
+import { markdownToHwpx, hwpxToHwp, buildAgencyPack, loadAgencyPack, packTemplate, resolvePackKind, packRoleWarnings, packSummary, unknownFontWarnings, usesGaejosikMunche, PRESET_ALIAS, isKepcoPresetAlias, incompatibleGongmunWarnings, gongmunLintWarnings, muncheLintWarnings, slopLintWarnings, logicLintWarnings, usesLogicStructure, gongmunGate, formatGateFinding } from "../index.js"
 import type { GongmunOptions } from "../index.js"
 import { measurePdfLayout } from "../pdf/layout-measure.js"
 import { applyMeasuredLayout } from "../hwpx/layout-options.js"
@@ -70,6 +70,16 @@ export function registerGenerateTools(server: McpServer): void {
       end_mark: z.boolean().optional().describe("본문 끝 '끝.' 표시 (행정업무규정). 미지정 시 기안문만 켜짐, 본문이 이미 '끝.'으로 끝나면 중복 생성 안 함"),
       body_title_box: z.boolean().optional().describe("본문 첫 페이지 제목 반복 박스 (개조식 실측 관행). 미지정 시 개조식+표지 조합에서 켜짐"),
       chapter_fit: z.boolean().optional().describe("개조식 장 헤더 제목 칸을 글자 폭에 맞춤. 미지정 시 제목 칸이 본문 폭까지"),
+      approval_cover: z.object({
+        signers: z.array(z.string()).min(1).max(5).optional().describe("결재란 직위(왼쪽부터). 기본 ['차장','부장','처장']"),
+        agree: z.union([z.string(), z.literal(false)]).optional().describe("합의 줄의 부서·직위. 미지정=빈 칸 줄, false=합의 줄 없음"),
+        subtitle: z.string().optional().describe("표지 부제(제목 위 작은 줄)"),
+        draft: z.boolean().optional().describe("제목 끝 '( 안 )' (기본 true)"),
+        org: z.string().optional().describe("처(실) 이름 — 표지 가운데 큰 줄"),
+        dept: z.string().optional().describe("부(팀) 이름 — 처 아래 줄, 작성자 소속 기본"),
+        author: z.object({ dept: z.string().optional(), rank: z.string().optional(), name: z.string().optional(), phone: z.string().optional() }).optional().describe("작성자 줄: 소속 직위 이름 (☎ 전화)"),
+        docInfo: z.object({ docNo: z.string().optional(), regDate: z.string().optional(), retention: z.string().optional(), openness: z.string().optional() }).optional().describe("문서번호 상자 값. 공개구분 기본 '공개'"),
+      }).optional().describe("한전 다단 결재 표지(개조식 전용) — 결재표(기본 차장·부장·처장)+합의 줄+문서번호 상자+부제·제목('( 안 )')+처·부+작성자. 주면 개조식 파랑 바 표지 대신 이 표지를 만든다"),
       step_indent: z.boolean().optional().describe("개조식 단계별 계단 들여쓰기: 장 띠 0·절 띠 1칸·□ 2칸·○ 3칸·- 4칸(1칸=16pt 글자 폭), □ 아래 데이터 표는 □ 위치에서 시작. 개조식 전용, 미지정 시 꺼짐"),
       step_spacing: z.boolean().optional().describe("개조식 단계별 간격: □○- 줄간격 200%, 장·절 띠 앞 300%, □ 앞 250%. 개조식 전용, 미지정 시 꺼짐"),
       h2_marker: z.enum(H2_MARKERS).optional().describe("h2 장 제목 표기: band=로마자 채움 칸+제목 띠 표(보고서·계획서 기본), roman='Ⅰ. 제목' 텍스트, number='1. 제목'(통지 기본), box=장 없이 □ 대항목으로, none=번호 없음. 기안문 본문의 h2는 항상 법정 '1.' 항목"),
@@ -117,12 +127,12 @@ export function registerGenerateTools(server: McpServer): void {
       inline_math: z.boolean().optional().describe("본문·표 셀의 인라인 수식 $…$ 를 한글 수식 개체로 생성 (블록 $$…$$ 는 늘 수식). 미지정 시 글자 그대로 — 가격 표기 같은 일반 $ 오인 방지. 켜도 짝이 맞는 $…$ 만(공백으로 시작·끝나거나 \\$ 이스케이프면 제외)"),
       gate: z.boolean().optional().describe("공문서 게이트 — 표기법·문체 error 와 윤문(생성형 AI 문체)·구성(왜→무엇→어떻게, 문제점↔방안 짝, 배경 사실·기대효과 목표치) 지적이 하나라도 있으면 파일을 만들지 않고 지적 목록을 돌려준다. 결재용 원고는 켜고, 지적을 고쳐 쓴 뒤 다시 호출"),
     },
-    async ({ markdown, output_path, profile_path, template_path, pack_path, pack_kind, layout_path, preset, font, body_pt, line_spacing, org, date, toc, cover, approval, page_numbers, end_mark, body_title_box, chapter_fit, step_indent, step_spacing, h2_marker, band_color, band_text_color, summary, doc_info, checklist, dept, cover_label, fonts, sizes, levels, bullet2, agency, suppress_single, total_row, doc_head, doc_foot, report_info, notice_head, press, paper, landscape, columns, column_gap_mm, column_line, header, footer, image_dir, inline_math, gate }) => {
+    async ({ markdown, output_path, profile_path, template_path, pack_path, pack_kind, layout_path, preset, font, body_pt, line_spacing, org, date, toc, cover, approval, page_numbers, end_mark, body_title_box, chapter_fit, approval_cover, step_indent, step_spacing, h2_marker, band_color, band_text_color, summary, doc_info, checklist, dept, cover_label, fonts, sizes, levels, bullet2, agency, suppress_single, total_row, doc_head, doc_foot, report_info, notice_head, press, paper, landscape, columns, column_gap_mm, column_line, header, footer, image_dir, inline_math, gate }) => {
       try {
         // 부서 서식 견본 — 서식은 견본이 정한다. 함께 준 서식 옵션은 조용히 버리지 않고 오류
         if (template_path && pack_path) return { content: [{ type: "text", text: "오류: template_path 와 pack_path 는 함께 쓸 수 없습니다 — 하나만 주세요" }], isError: true }
         if (template_path || pack_path) {
-          const given: Record<string, unknown> = { profile_path, layout_path, preset, font, body_pt, line_spacing, org, date, toc, cover, approval, page_numbers, end_mark, body_title_box, chapter_fit, step_indent, step_spacing, h2_marker, band_color, band_text_color, summary, doc_info, checklist, dept, cover_label, fonts, sizes, levels, bullet2, agency, suppress_single, doc_head, doc_foot, report_info, notice_head, press, paper, landscape, columns, column_gap_mm, column_line, header, footer, image_dir, inline_math }
+          const given: Record<string, unknown> = { profile_path, layout_path, preset, font, body_pt, line_spacing, org, date, toc, cover, approval, page_numbers, end_mark, body_title_box, chapter_fit, approval_cover, step_indent, step_spacing, h2_marker, band_color, band_text_color, summary, doc_info, checklist, dept, cover_label, fonts, sizes, levels, bullet2, agency, suppress_single, doc_head, doc_foot, report_info, notice_head, press, paper, landscape, columns, column_gap_mm, column_line, header, footer, image_dir, inline_math }
           const clash = Object.keys(given).filter((k) => given[k] !== undefined)
           if (clash.length) return { content: [{ type: "text", text: `오류: ${templateConflictMessage(clash)}` }], isError: true }
           const out = safeOutputPath(output_path, new Set([".hwpx", ".hwp"]))
@@ -166,6 +176,7 @@ export function registerGenerateTools(server: McpServer): void {
             org, date, cover, toc, approval,
             pageNumbers: page_numbers, endMark: end_mark, bodyTitleBox: body_title_box, chapterFit: chapter_fit,
             stepIndent: step_indent, stepSpacing: step_spacing,
+            kepco: isKepcoPresetAlias(preset) || undefined, approvalCover: approval_cover,
             h2Marker: h2_marker, bandColor: band_color, bandTextColor: band_text_color, fonts, sizes, levels, bullet2, suppressSingle: suppress_single, totalRow: total_row,
             docHead: doc_head, docFoot: doc_foot, reportInfo: report_info,
             noticeHead: notice_head, press, summary, docInfo: doc_info, dept, coverLabel: cover_label, agency,

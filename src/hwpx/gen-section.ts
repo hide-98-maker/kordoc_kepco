@@ -8,6 +8,7 @@
  */
 
 import { type ResolvedGongmun, levelIndent, mmToHwpunit, needsGaejosikAssets, usesReportFonts } from "./gongmun.js"
+import { parseAttachHeading, buildKepcoHeading, buildKepcoAttachTitle, buildKepcoAttachList, buildKepcoApprovalCover, gaejosikExtraParaIds } from "./gen-kepco.js"
 import { GAEJOSIK_STEP_UNIT, stripChapterNumber, gaejosikSizes, gaejosikBodyWidth, GAEJOSIK_BASE_WIDTH } from "./gaejosik.js"
 import { type GaejosikSummaryPlan, buildGaejosikSummary, buildGaejosikCover, coverMetaBlocks, buildGaejosikToc, buildGaejosikChapter, buildGaejosikBodyTitle, gaejosikTitleH1, resetGjTableIds, buildGaejosikSection, GJ_SECTION_RE, GJ_CAPTION_RE, GJ_UNIT_RE, GJ_SOURCE_RE, type GaejosikExtraChars } from "./gen-gaejosik.js"
 import {
@@ -144,6 +145,10 @@ interface SectionCtx {
   gjSummary: GaejosikSummary | null
   /** 개조식 절 띠 번호·표 캡션·단위 줄 charPr — 원고에 없으면 null(종전 출력) */
   gjChars: GaejosikExtraChars | null
+  /** 한전 개조식 — 번호 제목 카운터·붙임 목록 */
+  kepcoNo: number
+  kepcoAttachItems: { no: string; title: string }[]
+  kepcoAttachListPending: boolean
   /** 이미지 placeholder 레지스트리 (v4.0.5) — null이면 종전 alt 텍스트 폴백 */
   images: ImageRegistry | null
   /** 파생 플래그·스타일 */
@@ -224,7 +229,9 @@ function buildPreamble(blocks: MdBlock[], ctx: SectionCtx): void {
         org: meta.org !== undefined ? (blocks[meta.org].text || "").trim() : gongmun.cover.org,
       }
       for (const i of [meta.date, meta.org]) if (i !== undefined) ctx.coverMetaIdxs.add(i)
-      const coverPart = buildGaejosikCover(coverTitle, { ...gongmun, cover }, gjBodyW)
+      const coverPart = gongmun.approvalCover && bfReg
+        ? buildKepcoApprovalCover(coverTitle, gongmun, bfReg)
+        : buildGaejosikCover(coverTitle, { ...gongmun, cover }, gjBodyW)
       coverPart[0] = hide(coverPart[0], true)
       preamble.push(...coverPart)
       ctx.coverH1Idx = h1Idx
@@ -275,6 +282,14 @@ function buildPreamble(blocks: MdBlock[], ctx: SectionCtx): void {
   }
 }
 
+/** 붙임 목록 항목 — 본문 번호(붙임 3-1 같은 하위 번호는 제외, 전부 하위뿐이면 모두) */
+function kepcoAttachItems(blocks: MdBlock[], gongmun: ResolvedGongmun | null): { no: string; title: string }[] {
+  if (!gongmun?.kepco) return []
+  const all = blocks.filter((b) => b.type === "heading" && (b.level ?? 1) === 2).map((b) => parseAttachHeading(b.text || "")).filter((a): a is { no: string; title: string } => a !== null)
+  const main = all.filter((a) => !a.no.includes("-"))
+  return main.length > 0 ? main : all
+}
+
 // ─── 블록 타입별 렌더 핸들러 ─────────────────────────
 
 /**
@@ -317,6 +332,20 @@ function renderHeading(block: MdBlock, blockIdx: number, ctx: SectionCtx): strin
   }
   if (ctx.gaejosik) {
     const lvl = block.level || 1
+    if (gongmun!.kepco && lvl === 2) {
+      // 한전 개조식 — "## 붙임 N. 제목" 은 회색 제목 띠(새 쪽), 그 외 장 제목은 띠 없는 "1. 제목"
+      const att = parseAttachHeading(block.text || "")
+      if (att && bfReg) {
+        const list = ctx.kepcoAttachListPending && ctx.kepcoAttachItems.length > 0 && gaejosikExtraParaIds(gongmun!, ctx.gongmunList?.indentVariants.length ?? 0, GONGMUN_LIST_VARIANT_BASE).attach
+        let head = ""
+        if (list) {
+          head = buildKepcoAttachList(ctx.kepcoAttachItems, list).join("\n  ") + "\n  "
+          ctx.kepcoAttachListPending = false
+        }
+        return head + buildKepcoAttachTitle(att.no, att.title, gjBodyW, bfReg)
+      }
+      return buildKepcoHeading(++ctx.kepcoNo, stripChapterNumber(block.text || ""))
+    }
     if (lvl <= 2) {
       // h1(표지 아님)·h2 → 로마숫자 장 헤더 표 (선행 번호는 로마숫자로 대체).
       // 번호는 장 목록 SSOT(gjChapterIdxs — 목차와 공유)에서 조회 (P1-3)
@@ -328,12 +357,19 @@ function renderHeading(block: MdBlock, blockIdx: number, ctx: SectionCtx): strin
       const sec = GJ_SECTION_RE.exec((block.text || "").trim())
       if (sec && ctx.gjChars && bfReg) return buildGaejosikSection(sec[1], sec[2], gjBodyW, bfReg, ctx.gjChars.sectionNum, GJ_CHAR_DAE,
         gongmun!.stepIndent || gongmun!.stepSpacing
-          ? { paraPr: GONGMUN_LIST_VARIANT_BASE + (ctx.gongmunList?.indentVariants.length ?? 0), inset: gongmun!.stepIndent ? GAEJOSIK_STEP_UNIT : 0 }
+          ? { paraPr: gaejosikExtraParaIds(gongmun!, ctx.gongmunList?.indentVariants.length ?? 0, GONGMUN_LIST_VARIANT_BASE).sectionBand, inset: gongmun!.stepIndent ? GAEJOSIK_STEP_UNIT : 0 }
           : {})
+      // levels 옵션이 □(0단계)를 지정했으면 그 글꼴·크기가 프리셋 실측값보다 우선
+      const lv0 = ctx.levelIds?.[0]
+      if (lv0) return markedParagraph("□", block.text || "", GONGMUN_LIST_BASE, lv0.normal, gongmun!.bodyHeight / 2,
+        (id) => (id === CHAR_BOLD ? lv0.bold : id === CHAR_NORMAL ? lv0.normal : id))
       return markedParagraph("□", block.text || "", GONGMUN_LIST_BASE, GJ_CHAR_DAE, gongmun!.bodyHeight / 2,
         (id) => (id === CHAR_BOLD ? GJ_CHAR_DAE_BOLD : id))
     }
-    // h4~h6 → ○/ㅇ 중항목 (bullet2)
+    // h4~h6 → ○/ㅇ 중항목 (bullet2) — levels 가 1단계를 지정했으면 그 값
+    const lv1 = ctx.levelIds?.[1]
+    if (lv1) return markedParagraph(gongmun!.bullet2, block.text || "", GONGMUN_LIST_BASE + 1, lv1.normal, gongmun!.bodyHeight / 2,
+      (id) => (id === CHAR_BOLD ? lv1.bold : id === CHAR_NORMAL ? lv1.normal : id))
     return markedParagraph(gongmun!.bullet2, block.text || "", GONGMUN_LIST_BASE + 1, CHAR_NORMAL, gongmun!.bodyHeight / 2)
   }
   const pId = headingParaPrId(block.level || 1)
@@ -638,6 +674,9 @@ export function blocksToSectionXml(
     titleBoxH1Idx: -1,
     pressH1Idx: -1,
     gjChapterIdxs: [],
+    kepcoNo: 0,
+    kepcoAttachItems: kepcoAttachItems(blocks, gongmun),
+    kepcoAttachListPending: true,
     pendingPageBreak: false,
     pendingNewNum: false,
     // 순서 있는 목록 카운터 — indent 레벨별 별도 유지. 다른 블록 만나면 해당 레벨 리셋.

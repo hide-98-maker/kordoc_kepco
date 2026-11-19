@@ -12,6 +12,7 @@
  * 표면 문법(플래그 이름·설명문·kv 파싱)은 각 표면의 것 — 여기는 값과 의미만 담는다.
  */
 
+import { KordocError } from "../utils.js"
 import type { GongmunOptions, GongmunPreset } from "./gongmun.js"
 
 // ─── 값 집합 (CLI 검증·MCP zod 공통 파생원) ──────────────
@@ -82,6 +83,10 @@ export interface GongmunSurfaceInput {
   chapterFit?: boolean
   stepIndent?: boolean
   stepSpacing?: boolean
+  /** 한전 개조식 변형 — CLI·MCP 가 프리셋 별칭(isKepcoPresetAlias)으로 켠다 */
+  kepco?: boolean
+  /** 한전 다단 결재 표지 */
+  approvalCover?: NonNullable<GongmunOptions["approvalCover"]>
   h2Marker?: (typeof H2_MARKERS)[number]
   /** 띠 제목 번호칸 채움색·글자색 (#RRGGBB) */
   bandColor?: string
@@ -118,6 +123,14 @@ export interface GongmunSurfaceInput {
  *   → 미지정이면 프리셋 기본(resolveGongmun)
  * - 나머지는 "명시된 것만 대입" — 프리셋 기본값을 undefined로 덮지 않는다
  */
+/** --approval-cover JSON 해석 — 객체만 받는다 */
+export function parseApprovalCover(raw: string): NonNullable<GongmunOptions["approvalCover"]> {
+  let v: unknown
+  try { v = JSON.parse(raw) } catch { throw new KordocError("--approval-cover 는 JSON 객체여야 합니다") }
+  if (!v || typeof v !== "object" || Array.isArray(v)) throw new KordocError("--approval-cover 는 JSON 객체여야 합니다")
+  return v as NonNullable<GongmunOptions["approvalCover"]>
+}
+
 export function buildGongmunOptions(input: GongmunSurfaceInput): GongmunOptions {
   const g: GongmunOptions = { preset: input.preset }
   if (input.font) g.bodyFont = input.font
@@ -142,6 +155,8 @@ export function buildGongmunOptions(input: GongmunSurfaceInput): GongmunOptions 
   if (input.bodyTitleBox !== undefined) g.bodyTitleBox = input.bodyTitleBox
   if (input.chapterFit !== undefined) g.chapterFit = input.chapterFit
   if (input.stepIndent !== undefined) g.stepIndent = input.stepIndent
+  if (input.kepco) g.kepco = true
+  if (input.approvalCover) g.approvalCover = input.approvalCover
   if (input.stepSpacing !== undefined) g.stepSpacing = input.stepSpacing
   if (input.h2Marker) g.h2Marker = input.h2Marker
   if (input.bandColor) g.bandColor = input.bandColor
