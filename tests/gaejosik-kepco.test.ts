@@ -99,7 +99,7 @@ describe("한전 개조식", () => {
     const { sec, hdr } = await parts(kepco)
     const left = (id: number) => Number(hdr.match(new RegExp(`<hh:paraPr id="${id}"[\\s\\S]*?<hc:left value="(-?\\d+)"`))![1])
     const line = (id: number) => Number(hdr.match(new RegExp(`<hh:paraPr id="${id}"[\\s\\S]*?<hh:lineSpacing type="PERCENT" value="(\\d+)"`))![1])
-    assert.deepEqual([left(8), left(9), left(10), left(20)], [1600, 3200, 4800, 4800])
+    assert.deepEqual([left(8), left(9), left(10), left(20)], [800, 1600, 2400, 2400])
     assert.equal(line(8), 200)
     assert.ok(/<hp:t>\*<hp:tab/.test(sec), "※ 원고가 * 부호로")
     const off = resolveGongmun({ preset: "gaejosik", kepco: true, stepIndent: false, stepSpacing: false })
@@ -139,12 +139,18 @@ describe("한전 개조식", () => {
     assert.equal(ls(p.match(/paraPrIDRef="(\d+)"/)![1]), 250, "둘째 □ 위 문장 → 250%")
   })
 
-  it("□ 문장 전체 굵게 — 괄호 뒤 본문도 굵은 글자 모양", async () => {
+  it("□ 문장은 전체 굵게, □ 부호만 보통 굵기 — 괄호는 전용 글자 모양", async () => {
     const { sec, hdr } = await parts(kepco)
+    const cp = (id: string) => hdr.slice(hdr.indexOf(`<hh:charPr id="${id}"`), hdr.indexOf("</hh:charPr>", hdr.indexOf(`<hh:charPr id="${id}"`)))
     const m = /<hp:t>\(특성\)<\/hp:t><\/hp:run><hp:run charPrIDRef="(\d+)"><hp:t> <\/hp:t><\/hp:run><hp:run charPrIDRef="(\d+)"><hp:t>단선 시/.exec(sec)
     assert.ok(m, "괄호 뒤 본문 run")
-    const b = hdr.slice(hdr.indexOf(`<hh:charPr id="${m![2]}"`), hdr.indexOf("</hh:charPr>", hdr.indexOf(`<hh:charPr id="${m![2]}"`)))
-    assert.ok(b.includes('bold="1"') && b.includes('height="1600"'), b)
+    const b = cp(m![2])
+    assert.ok(b.includes('bold="1"') && b.includes('height="1600"'), "□ 문장은 굵게: " + b)
+    // 같은 문단의 □ 부호 run 은 굵지 않다
+    const para = sec.slice(sec.lastIndexOf("<hp:p ", sec.indexOf("(특성)")), sec.indexOf("(특성)"))
+    const mk = /<hp:run charPrIDRef="(\d+)"><hp:t>□/.exec(para)
+    assert.ok(mk, "□ 부호 run")
+    assert.ok(!cp(mk![1]).includes('bold="1"'), "□ 부호는 보통 굵기: " + cp(mk![1]))
   })
 
   it("#### 시사점 + 목록 → 시사점 상자, >> 문장 → 결론 띠", async () => {

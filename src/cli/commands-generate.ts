@@ -52,7 +52,7 @@ export function registerGenerateCommands(program: Command): void {
     .option("--no-end-mark", "'끝.' 표시 끄기 (기안문 기본 켜짐)")
     .option("--no-body-title-box", "본문 첫 페이지 제목 반복 박스 끄기 (개조식+표지 기본 켜짐)")
     .option("--chapter-fit", "개조식 장 헤더 제목 칸을 글자 폭에 맞춤 (기본: 본문 폭까지)")
-    .option("--step-indent", "개조식 단계별 계단 들여쓰기 (장 띠 0·절 띠 1칸·□ 2칸·○ 3칸·- 4칸, 1칸=16pt 글자 폭)")
+    .option("--step-indent", "개조식 단계별 계단 들여쓰기 (장 띠 0·절 띠 1칸·□ 2칸·○ 3칸·- 4칸, 1칸=16pt 글자 폭의 절반)")
     .option("--approval-cover <json>", '한전 다단 결재 표지(개조식) JSON: {"signers":["차장","부장","처장"],"org":"배전운영처","dept":"배전계통부","subtitle":"부제","author":{"rank":"차장","name":"홍길동","phone":"061-0000"},"agree":"합의 부서"}')
     .option("--step-spacing", "개조식 단계별 간격 (□○- 줄간격 200%·장절 띠 앞 300%·□ 앞 250%)")
     .option("--h2-marker <type>", "h2 장 제목 표기: band(로마자 채움 칸 + 제목 띠 표 — 보고서·계획서 기본)·roman(Ⅰ. 텍스트)·number(1. — 통지 기본)·box(장 없이 □ 대항목)·none")

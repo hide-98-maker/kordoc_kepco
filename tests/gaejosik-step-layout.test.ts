@@ -8,7 +8,7 @@ import { markdownToHwpx, parse } from "../src/index.js"
 import { buildGongmunOptions } from "../src/hwpx/gongmun-surface.js"
 import { resolveGongmun } from "../src/hwpx/gongmun.js"
 
-const UNIT = 1600
+const UNIT = 800
 const md = `# 시험\n\n## 장\n\n### 1. 절\n\n### 대항목 가\n\n- 중항목 가-1\n  - 소항목 가-1-a\n\n### 대항목 나\n\n- 중항목 나-1\n\n<right>출처: 자체</right>`
 const base = { preset: "gaejosik" as const, cover: false, toc: false }
 

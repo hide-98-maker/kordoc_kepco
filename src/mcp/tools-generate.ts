@@ -80,7 +80,7 @@ export function registerGenerateTools(server: McpServer): void {
         author: z.object({ dept: z.string().optional(), rank: z.string().optional(), name: z.string().optional(), phone: z.string().optional() }).optional().describe("작성자 줄: 소속 직위 이름 (☎ 전화)"),
         docInfo: z.object({ docNo: z.string().optional(), regDate: z.string().optional(), retention: z.string().optional(), openness: z.string().optional() }).optional().describe("문서번호 상자 값. 공개구분 기본 '공개'"),
       }).optional().describe("한전 다단 결재 표지(개조식 전용) — 결재표(기본 차장·부장·처장)+합의 줄+문서번호 상자+부제·제목('( 안 )')+처·부+작성자. 주면 개조식 파랑 바 표지 대신 이 표지를 만든다"),
-      step_indent: z.boolean().optional().describe("개조식 단계별 계단 들여쓰기: 장 띠 0·절 띠 1칸·□ 2칸·○ 3칸·- 4칸(1칸=16pt 글자 폭), □ 아래 데이터 표는 □ 위치에서 시작. 개조식 전용, 미지정 시 꺼짐"),
+      step_indent: z.boolean().optional().describe("개조식 단계별 계단 들여쓰기: 장 띠 0·절 띠 1칸·□ 2칸·○ 3칸·- 4칸(1칸=16pt 글자 폭의 절반), □ 아래 데이터 표는 □ 위치에서 시작. 개조식 전용, 미지정 시 꺼짐"),
       step_spacing: z.boolean().optional().describe("개조식 단계별 간격: □○- 줄간격 200%, 장·절 띠 앞 300%, □ 앞 250%. 개조식 전용, 미지정 시 꺼짐"),
       h2_marker: z.enum(H2_MARKERS).optional().describe("h2 장 제목 표기: band=로마자 채움 칸+제목 띠 표(보고서·계획서 기본), roman='Ⅰ. 제목' 텍스트, number='1. 제목'(통지 기본), box=장 없이 □ 대항목으로, none=번호 없음. 기안문 본문의 h2는 항상 법정 '1.' 항목"),
       band_color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional().describe("띠 제목 번호칸 채움색 #RRGGBB (기본 #003366 실측 최다. 교육청형 밝은 띠는 #DFE6F7 + band_text_color #000000)"),

@@ -317,9 +317,10 @@ function kepcoAttachItems(blocks: MdBlock[], gongmun: ResolvedGongmun | null): {
  * 내어쓰기 위치에 서서 첫 줄 내용이 둘째 줄과 같은 x 에서 시작한다(v5 와 같은 방식 — 부호 폭 추정과 무관).
  * 탭 폭 속성은 한컴이 조판 때 다시 잰다(값은 반각 근사).
  */
-function markedParagraph(marker: string, content: string, paraPrId: number, charPrId: number, halfEm: number, mapCharId?: (id: number) => number, styleId = 0, leadCharPr?: number): string {
+function markedParagraph(marker: string, content: string, paraPrId: number, charPrId: number, halfEm: number, mapCharId?: (id: number) => number, styleId = 0, leadCharPr?: number, markerCharPr?: number): string {
   const cid = mapCharId ? mapCharId(charPrId) : charPrId
-  const run = `<hp:run charPrIDRef="${cid}"><hp:t>${escapeTextXml(marker)}<hp:tab width="${Math.round(halfEm)}" leader="0" type="1"/></hp:t></hp:run>`
+  // 부호 글자 모양을 따로 줄 수 있다 — 한전 개조식 □ 는 문장만 굵게, 부호는 보통 굵기
+  const run = `<hp:run charPrIDRef="${markerCharPr ?? cid}"><hp:t>${escapeTextXml(marker)}<hp:tab width="${Math.round(halfEm)}" leader="0" type="1"/></hp:t></hp:run>`
   // 한전 개조식 □ 첫 괄호 — "(분산e 특성)" 만 전용 글자 모양(레퍼런스 한컴 윤고딕 740 굵게 남색), 나머지는 본문
   const paren = leadCharPr !== undefined ? splitLeadParen(content) : null
   if (paren) {
@@ -392,10 +393,10 @@ function renderHeading(block: MdBlock, blockIdx: number, ctx: SectionCtx): strin
           : {})
       // levels 옵션이 □(0단계)를 지정했으면 그 글꼴·크기가 프리셋 실측값보다 우선
       const lv0 = ctx.levelIds?.[0]
-      // 한전 개조식 □ 문장은 전체 굵게(사용자 지정) — 괄호만 전용 글자 모양
+      // 한전 개조식 □ 는 문장 전체 굵게, □ 부호만 보통 굵기(사용자 지정 2026-11-20) — 첫 괄호는 전용 글자 모양
       const daeChar = lv0 ? (gongmun!.kepco ? lv0.bold : lv0.normal) : 0
       if (lv0) return markedParagraph("□", block.text || "", GONGMUN_LIST_BASE, daeChar, gongmun!.bodyHeight / 2,
-        (id) => (id === CHAR_BOLD ? lv0.bold : id === CHAR_NORMAL ? daeChar : id), 0, ctx.gjChars?.kepcoParen)
+        (id) => (id === CHAR_BOLD ? lv0.bold : id === CHAR_NORMAL ? daeChar : id), 0, ctx.gjChars?.kepcoParen, gongmun!.kepco ? lv0.normal : undefined)
       return markedParagraph("□", block.text || "", GONGMUN_LIST_BASE, GJ_CHAR_DAE, gongmun!.bodyHeight / 2,
         (id) => (id === CHAR_BOLD ? GJ_CHAR_DAE_BOLD : id), 0, ctx.gjChars?.kepcoParen)
     }
@@ -567,13 +568,13 @@ function renderListItem(block: MdBlock, blockIdx: number, ctx: SectionCtx): stri
     // fit 변형은 이 depth 를 제외하므로(gen-gongmun-fit) 본문·굵게만 전용 쌍으로 치환
     const lv = ctx.levelIds?.[depth]
     if (lv) {
-      // 한전 개조식 □(0단계)는 문장 전체 굵게
+      // 한전 개조식 □(0단계)는 문장 전체 굵게, □ 부호만 보통 굵기
       const base = gongmun.kepco && depth === 0 ? lv.bold : lv.normal
       listCharPr = base
       mapId = (id) => (id === CHAR_BOLD ? lv.bold : id === CHAR_NORMAL ? base : id)
     }
     return marker
-      ? markedParagraph(marker, content, listParaPr, listCharPr, gongmun.bodyHeight / 2, mapId, 0, depth === 0 ? ctx.gjChars?.kepcoParen : undefined)
+      ? markedParagraph(marker, content, listParaPr, listCharPr, gongmun.bodyHeight / 2, mapId, 0, depth === 0 ? ctx.gjChars?.kepcoParen : undefined, gongmun.kepco && depth === 0 && lv ? lv.normal : undefined)
       : generateParagraph(content, listParaPr, listCharPr, mapId)
   }
   const indent = block.indent || 0

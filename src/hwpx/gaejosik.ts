@@ -102,8 +102,8 @@ export function gaejosikLevelIndent(depth: number, bodyHeight: number, sizes: Ga
   return { left: stepIndent ? gaejosikStepLeft(depth, stepIndent) : left, indent: -markerWidth(gaejosikMarker(depth, bullet2), h) }
 }
 
-/** 단계별 계단 들여쓰기(stepIndent)의 1칸 — 휴먼명조 16pt 한 글자 폭(전각 = 글자 크기, 1600 HWPUNIT) */
-export const GAEJOSIK_STEP_UNIT = 1600
+/** 단계별 계단 들여쓰기(stepIndent)의 1칸 — 휴먼명조 16pt 한 글자 폭의 절반(800 HWPUNIT, 사용자 지정 2026-11-20) */
+export const GAEJOSIK_STEP_UNIT = 800
 
 /**
  * stepIndent 의 단계별 왼쪽 여백 — base 는 □ 의 칸 수(ResolvedGongmun.stepBase).
