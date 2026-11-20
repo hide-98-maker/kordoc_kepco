@@ -40,13 +40,13 @@ export function gaejosikExtraParaIds(g: Pick<ResolvedGongmun, "stepIndent" | "st
   const sectionBand = g.stepIndent || g.stepSpacing ? next++ : undefined
   let attach: KepcoAttachParaIds | undefined
   if (g.kepco) {
-    const first = next++, nxt = next++, hostDae = next++, hostOther = next++, boxFirst = next++, boxNext = next++
+    const first = next++, nxt = next++, hostDae = next++, hostOther = next++, boxFirst = next++, boxNext = next++, blank100 = next++, blank50 = next++
     const twins: Record<number, Record<number, number>> = {}
     for (const pct of KEPCO_TWIN_SPACINGS) {
       twins[pct] = {}
       for (const b of KEPCO_TWIN_BASES) twins[pct][b] = next++
     }
-    attach = { first, next: nxt, hostDae, hostOther, boxFirst, boxNext, twins }
+    attach = { first, next: nxt, hostDae, hostOther, boxFirst, boxNext, blank100, blank50, twins }
   }
   return { sectionBand, attach }
 }
@@ -87,6 +87,8 @@ export interface KepcoAttachParaIds {
   first: number; next: number; hostDae: number; hostOther: number
   /** 시사점 상자 본문 — 첫 줄(• 내어쓰기)·이어지는 줄 */
   boxFirst: number; boxNext: number
+  /** 간격용 빈 줄 — 줄간격 100%(장 제목 앞 300%)·50%(두 번째 이후 □ 앞 250%), 문단 위 0 */
+  blank100: number; blank50: number
   /** 줄간격 짝 paraPr — twins[줄간격][원래 paraPr id] = 짝 id. 다음 문단에 따라 앞 문단 줄간격만 바꾼다 */
   twins: Record<number, Record<number, number>>
 }

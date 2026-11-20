@@ -107,7 +107,7 @@ describe("한전 개조식", () => {
     assert.equal(off.stepSpacing, false)
   })
 
-  it("간격 — 문단 위는 모두 5pt, 앞 문단 줄간격으로 장 제목 앞 300%·□ 앞 250%·* 앞 180%, * 220%", async () => {
+  it("간격 — 문단 위는 모두 5pt, 장 제목 앞은 빈 줄 100%, * 앞 문단 180%, * 220%", async () => {
     const { sec, hdr } = await parts(kepco)
     const pp = (id: number) => {
       const b = hdr.slice(hdr.indexOf(`<hh:paraPr id="${id}"`), hdr.indexOf("</hh:paraPr>", hdr.indexOf(`<hh:paraPr id="${id}"`)))
@@ -123,20 +123,31 @@ describe("한전 개조식", () => {
     const lsOf = (text: string) => pp(seq.find(([, t]) => t.startsWith(text))![0])
     assert.equal(lsOf("1. 추진").ls, 200, "장 제목 바로 아래 첫 □ 는 200% 그대로")
     assert.equal(lsOf("-").ls, 180, "* 앞 - → 180%")
-    assert.equal(lsOf("*").ls, 300, "장 제목 앞 * → 300%")
-    for (const [id] of seq.slice(0, 6)) assert.equal(pp(id).prev, 500, "문단 위는 짝도 5pt")
+    assert.equal(lsOf("*").ls, 220, "* 는 220% 그대로(앞 문단 줄간격을 바꾸지 않는다)")
+    // * 와 다음 장 제목 사이에 빈 줄(줄간격 100%, 문단 위 0)
+    const iStar = seq.findIndex(([, t]) => t.startsWith("*"))
+    assert.deepEqual(seq[iStar + 1][1], "", "* 다음은 빈 줄")
+    assert.deepEqual({ ls: pp(seq[iStar + 1][0]).ls, prev: pp(seq[iStar + 1][0]).prev }, { ls: 100, prev: 0 })
+    assert.ok(seq[iStar + 2][1].startsWith("2. 현"), "빈 줄 다음 장 제목")
+    for (const [id, t] of seq.slice(0, 6)) if (t) assert.equal(pp(id).prev, 500, "글자 있는 문단 위는 5pt")
   })
 
-  it("두 번째 이후 □ 는 위 문장 줄간격 250%, 장 제목 바로 아래 첫 □ 는 200%", async () => {
+  it("두 번째 이후 □ 앞은 빈 줄 50%(위 문장 200% 유지), 장 제목 바로 아래 첫 □ 는 빈 줄 없음", async () => {
     const z = await JSZip.loadAsync(await markdownToHwpx("## 추진배경\n\n### 첫째 항목\n\n- 내용 하나\n\n### 둘째 항목\n\n- 내용 둘\n", { gongmun: kepco as never }))
     const sec = await z.file("Contents/section0.xml")!.async("text")
     const hdr = await z.file("Contents/header.xml")!.async("text")
     const ls = (id: string) => Number(hdr.slice(hdr.indexOf(`<hh:paraPr id="${id}"`)).match(/lineSpacing type="PERCENT" value="(\d+)"/)![1])
     const pOf = (text: string) => sec.slice(sec.lastIndexOf("<hp:p ", sec.indexOf(text))).match(/paraPrIDRef="(\d+)"/)![1]
     assert.equal(ls(pOf("1. 추진배경")), 200, "장 제목 → 첫 □ 200%")
-    // "내용 하나" 는 ○ 문단(부호 run 뒤 본문 run) — 그 문단의 paraPr
-    const p = sec.slice(sec.lastIndexOf("<hp:p ", sec.indexOf("내용 하나")))
-    assert.equal(ls(p.match(/paraPrIDRef="(\d+)"/)![1]), 250, "둘째 □ 위 문장 → 250%")
+    // 위 문장 "내용 하나"(○) 는 200% 그대로, 그 뒤 빈 줄 50%, 그 뒤 둘째 □
+    assert.equal(ls(pOf("내용 하나")), 200, "위 문장은 200% 유지")
+    const after = sec.slice(sec.indexOf("내용 하나"), sec.indexOf("둘째 항목"))
+    const blanks = [...after.matchAll(/<hp:p paraPrIDRef="(\d+)"[^>]*><hp:run[^>]*><hp:t><\/hp:t>/g)]
+    assert.equal(blanks.length, 1, "빈 줄 하나")
+    assert.equal(ls(blanks[0][1]), 50)
+    // 장 제목과 첫 □ 사이에는 빈 줄이 없다
+    const head = sec.slice(sec.indexOf("1. 추진배경"), sec.indexOf("첫째 항목"))
+    assert.ok(!/<hp:t><\/hp:t>/.test(head))
   })
 
   it("□ 문장은 전체 굵게, □ 부호만 보통 굵기 — 괄호는 전용 글자 모양", async () => {

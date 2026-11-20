@@ -347,6 +347,9 @@ function buildParaProperties(gongmun: ResolvedGongmun | null, listIndentVariants
     base.push(
       paraPr(extra.attach.boxFirst, { align: "LEFT", lineSpacing: 220, left: 0, indent: -boxHang, keepWord: true, autoTab: true }),
       paraPr(extra.attach.boxNext, { align: "LEFT", lineSpacing: 220, left: boxHang, indent: 0, keepWord: true }),
+      // 간격용 빈 줄 — 앞 문단 200% 위에 더해 장 제목 앞 300%(100%)·□ 앞 250%(50%). 문단 위 0(5pt 를 더하지 않는다)
+      paraPr(extra.attach.blank100, { align: "LEFT", lineSpacing: 100, keepWord: true }),
+      paraPr(extra.attach.blank50, { align: "LEFT", lineSpacing: 50, keepWord: true }),
     )
     // 줄간격 짝 — 원래 paraPr XML 을 복제해 id·줄간격만 바꾼다(* 앞 180·□ 앞 250·장 제목 앞 300)
     for (const pct of KEPCO_TWIN_SPACINGS) {

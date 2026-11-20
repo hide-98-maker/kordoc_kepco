@@ -780,7 +780,9 @@ export function blocksToSectionXml(
       xml = ctx.opener.inject(xml)
     }
 
-    // 한전 개조식 — 다음 문단에 맞춰 바로 앞 문단 줄간격을 짝 paraPr 로: * 앞 180%·□ 앞 250%·장 제목 앞 300% (문단 위는 모두 5pt)
+    // 한전 개조식 — 다음 문단에 맞춘 간격(문단 위는 모두 5pt):
+    //   장 제목 앞 300%·두 번째 이후 □ 앞 250% → 앞 문단 200% 그대로 두고 빈 줄(줄간격 100%·50%)을 끼운다(앞 문단이 여러 줄이어도 문단 안은 200%)
+    //   * 앞 180% → 앞 문단 줄간격을 180% 짝 paraPr 로(빈 줄로는 줄일 수 없다)
     if (ctx.gongmun?.kepco && ctx.paraXmls.length > 0) {
       const nm = /^<hp:p (pageBreak="1" )?paraPrIDRef="(\d+)"/.exec(xml)
       // 새 쪽에서 시작하는 문단(붙임 띠)은 앞 쪽과 간격이 없으므로 건너뛴다
@@ -792,7 +794,12 @@ export function blocksToSectionXml(
       // 큰 숫자 제목 바로 아래 첫 □ 는 제목 줄간격 200% 그대로 — □ 앞 250% 는 두 번째 이후 □ 에만(사용자 지정)
       const headThenDae = pct === 250 && m && Number(m[2]) === GJ_PARA_CHAPTER
       const twin = ids && pct && m && !headThenDae && !ctx.paraXmls[last].includes("\n  <hp:p ") ? ids.twins[pct][Number(m[2])] : undefined
-      if (twin !== undefined) ctx.paraXmls[last] = ctx.paraXmls[last].replace(m![0], `<hp:p ${m![1]}paraPrIDRef="${twin}"`)
+      if (twin !== undefined && pct === 180) ctx.paraXmls[last] = ctx.paraXmls[last].replace(m![0], `<hp:p ${m![1]}paraPrIDRef="${twin}"`)
+      // 300·250 은 빈 줄 — 짝이 있는(본문 계열) 앞 문단 뒤에만, 전면부 뒤 첫 블록(새 쪽)은 빼고
+      else if (twin !== undefined && !ctx.pendingPageBreak) {
+        const blank = pct === 300 ? ids!.blank100 : ids!.blank50
+        ctx.paraXmls.push(`<hp:p paraPrIDRef="${blank}" styleIDRef="0"><hp:run charPrIDRef="${CHAR_NORMAL}"><hp:t></hp:t></hp:run></hp:p>`)
+      }
     }
 
     // 개조식 전면부(표지·목차) 뒤 본문 첫 블록은 새 페이지에서
