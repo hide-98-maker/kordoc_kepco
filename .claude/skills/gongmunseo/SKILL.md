@@ -9,6 +9,8 @@ allowed-tools: Read, Write, Edit, Bash, AskUserQuestion
 
 # 공문서(公文書) 생성 스킬
 
+> **실행 엔진:** MCP 서버 `kepdoc`(이 저장소 빌드 `dist/mcp.js`, 한전 개조식·다단 결재 표지 포함)이 연결돼 있으면 그 `generate_document` 를 쓴다 — `preset: "한전 개조식"`, 결재 표지는 `approval_cover`. CLI 가 필요하면 `node <kepdoc>/dist/cli.js generate …`. npm 의 원래 `kordoc` 에는 한전 개조식이 없다.
+
 내용·주제를 받아 **한국 행정 공문서 표준 서식의 HWPX**로 생성한다.
 서식 표준은 행정안전부 「행정업무운영편람」·「행정업무의 운영 및 혁신에 관한 규정」 시행규칙 근거.
 실제 렌더링(항목부호 행갈굼·여백·폰트)은 kordoc 공문서 모드(`kordoc generate --preset`)가 담당하므로,

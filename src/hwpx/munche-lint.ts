@@ -145,8 +145,10 @@ export function lintMuncheText(text: string): MuncheLintFinding[] {
     const at = leadBuf[0].line
     // 줄마다 부호(▪ □ ㅇ - * ※)로 시작하는 인용은 리드문이 아니라 성과 요약 박스(업무보고 프리셋) — 종결·길이 규칙 밖
     const bulleted = leadBuf.every((l) => /^[▪■□○ㅇ●\-–ㆍ·•*※]/u.test(l.body))
+    // ">> 문장" 은 한전 개조식 결론 띠 — 리드문이 아니다
+    const conclusion = leadBuf.every((l) => l.body.startsWith(">"))
     leadBuf = []
-    if (bulleted) return
+    if (bulleted || conclusion) return
     if (block.length < 20) return // 짧은 인용은 리드문이 아니다
     if (!LEAD_ENDING.test(block)) {
       add(at, "lead", "warning", "LEAD_ENDING", block,
